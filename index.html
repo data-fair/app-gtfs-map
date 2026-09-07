@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><!-- pas de lang : posé par le proxy data-fair -->
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>@layer vuetify-core, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;</style>
+    <link href="/simple-directory/api/sites/_theme.css" rel="stylesheet">
+    <script src="/simple-directory/api/sites/_public.js"></script>
+
+    <title>GTFS map</title><!-- nom du modèle : le proxy le remplace par le titre de l'application -->
+
+    <!-- contrat data-fair, lu à l'exécution -->
+    <meta name="df:vjsf" content="3">
+    <meta name="df:sync-config" content="true">
+    <meta name="df:sync-state" content="false">
+    <meta name="df:overflow" content="false">
+    <meta name="df:capture-delay" content="3">
+
+    <!-- catalogue, lu à l'import — migrera vers registry -->
+    <meta name="application-name" content="app-gtfs-map">
+    <meta name="description" content="A map application for data-fair: GTFS network with real-time vehicles.">
+
+    <script>window.APPLICATION=%APPLICATION%;</script>
+  </head>
+  <body>
+    <div id="app" style="height:100vh"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

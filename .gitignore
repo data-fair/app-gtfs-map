@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.dev-config.json
+src/config/.type
+tests/output
+playwright-report

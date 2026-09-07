@@ -1,0 +1,169 @@
+{
+  "type": "object",
+  "required": ["datasets"],
+  "layout": "tabs",
+  "allOf": [
+    {
+      "title": "Source de données",
+      "properties": {
+        "datasets": {
+          "type": "array",
+          "items": [
+            {
+              "title": "Jeu de données GTFS",
+              "description": "Le jeu de métadonnées produit par le traitement GTFS (sans données). Les jeux liés « tracés », « arrêts » et « horaires » sont détectés automatiquement.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "href": { "type": "string" },
+                "title": { "type": "string" },
+                "id": { "type": "string" },
+                "schema": { "type": "array" },
+                "finalizedAt": { "type": "string" }
+              },
+              "layout": {
+                "getItems": {
+                  "url": "api/v1/datasets?status=finalized&q={q}&select=id,title,schema&sort=createdAt:-1&size=50",
+                  "itemKey": "data[\"href\"]",
+                  "itemTitle": "data[\"title\"]",
+                  "itemsResults": "data[\"results\"]"
+                }
+              }
+            }
+          ]
+        },
+        "gtfsMap": {
+          "type": "object",
+          "title": "Jeux de données liés",
+          "description": "Détectés automatiquement à partir du jeu de métadonnées sélectionné.",
+          "layout": "none",
+          "properties": {
+            "shapesDataset": {
+              "type": "object",
+              "additionalProperties": false,
+              "layout": "none",
+              "properties": {
+                "id": { "type": "string" },
+                "href": { "type": "string" },
+                "title": { "type": "string" }
+              }
+            },
+            "stopsDataset": {
+              "type": "object",
+              "additionalProperties": false,
+              "layout": "none",
+              "properties": {
+                "id": { "type": "string" },
+                "href": { "type": "string" },
+                "title": { "type": "string" }
+              }
+            },
+            "stopTimesDataset": {
+              "type": "object",
+              "additionalProperties": false,
+              "layout": "none",
+              "properties": {
+                "id": { "type": "string" },
+                "href": { "type": "string" },
+                "title": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "Temps réel",
+      "properties": {
+        "realtime": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "title": "Afficher les véhicules en temps réel",
+              "description": "Les positions proviennent du flux GTFS-RT déclaré comme pièce jointe distante du jeu de métadonnées.",
+              "default": true
+            },
+            "refreshInterval": {
+              "type": "number",
+              "title": "Intervalle de rafraîchissement (en secondes)",
+              "default": 15,
+              "minimum": 5,
+              "maximum": 120,
+              "layout": {
+                "if": "rootData.realtime && rootData.realtime.enabled"
+              }
+            },
+            "url": {
+              "type": "string",
+              "title": "URL du flux GTFS-RT",
+              "description": "Détectée automatiquement dans les pièces jointes du jeu de métadonnées ; la saisir ici seulement pour forcer un autre flux.",
+              "layout": {
+                "if": "rootData.realtime && rootData.realtime.enabled"
+              }
+            },
+            "autoDetectedUrl": {
+              "type": "string",
+              "layout": "none"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "Affichage",
+      "properties": {
+        "map": {
+          "type": "object",
+          "properties": {
+            "styleUrl": {
+              "type": "string",
+              "title": "Style du fond de carte",
+              "description": "URL d'un style MapLibre. Par défaut le tileserver de l'instance data-fair.",
+              "default": "/tileserver/styles/klokantech-basic/style.json"
+            },
+            "showLines": {
+              "type": "boolean",
+              "title": "Afficher les tracés de lignes",
+              "default": true
+            },
+            "showStops": {
+              "type": "boolean",
+              "title": "Afficher les arrêts",
+              "default": true
+            },
+            "showStopLabels": {
+              "type": "boolean",
+              "title": "Afficher les noms des arrêts aux zooms élevés",
+              "default": true,
+              "layout": {
+                "if": "rootData.map && rootData.map.showStops"
+              }
+            },
+            "lineWidth": {
+              "type": "number",
+              "title": "Épaisseur des tracés",
+              "default": 4,
+              "minimum": 1,
+              "maximum": 15
+            },
+            "stopRadius": {
+              "type": "number",
+              "title": "Taille des arrêts",
+              "default": 5,
+              "minimum": 2,
+              "maximum": 12
+            },
+            "fallbackColor": {
+              "type": "string",
+              "title": "Couleur de repli",
+              "description": "Utilisée pour les lignes et véhicules sans couleur GTFS (route_color).",
+              "default": "#1976D2",
+              "layout": "color-picker"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
