@@ -98,18 +98,21 @@ const DOCS: Record<string, any> = {
     id: 'gtfs-shapes',
     href: '/api/v1/datasets/gtfs-shapes',
     title: 'Réseau Test - tracés',
+    relatedDatasets: [{ id: 'gtfs-meta', title: 'Réseau Test - métadonnées' }],
     schema: [{ key: 'geometry' }, { key: 'route_id' }, { key: 'route_short_name' }, { key: 'route_long_name' }, { key: 'route_color' }]
   },
   'gtfs-stops': {
     id: 'gtfs-stops',
     href: '/api/v1/datasets/gtfs-stops',
     title: 'Réseau Test - arrêts',
+    relatedDatasets: [{ id: 'gtfs-meta', title: 'Réseau Test - métadonnées' }],
     schema: [{ key: 'geometry' }, { key: 'stop_id' }, { key: 'stop_name' }, { key: 'routes' }]
   },
   'gtfs-stoptimes': {
     id: 'gtfs-stoptimes',
     href: '/api/v1/datasets/gtfs-stoptimes',
     title: 'Réseau Test - horaires',
+    relatedDatasets: [{ id: 'gtfs-meta', title: 'Réseau Test - métadonnées' }],
     schema: [{ key: 'trip_id' }, { key: 'arrival_time' }, { key: 'stop_id' }, { key: 'route_name' }]
   }
 }
@@ -123,6 +126,8 @@ export interface MockOptions {
   withoutRealtime?: boolean
   /** retire les jeux liés du jeu de métadonnées */
   withoutRelated?: boolean
+  /** retarde la réponse du jeu « tracés » (ms), pour vérifier l'ordre capture/rendu */
+  shapesDelayMs?: number
 }
 
 export async function mockApp (page: Page, options: MockOptions = {}) {
@@ -147,7 +152,11 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
       configuration: appConfig
     }
     ;(window as any).__captureCalled = false
-    ;(window as any).triggerCapture = () => { (window as any).__captureCalled = true }
+    ;(window as any).__captureAt = 0
+    ;(window as any).triggerCapture = () => {
+      (window as any).__captureCalled = true
+      ;(window as any).__captureAt = Date.now()
+    }
   }, {
     appConfig: {
       datasets: options.datasets ?? [{ id: 'gtfs-meta', href: '/api/v1/datasets/gtfs-meta', title: 'Réseau Test - métadonnées', finalizedAt: '2026-01-01T00:00:00.000Z' }]
@@ -159,7 +168,11 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
   await page.route('**/api/v1/datasets/gtfs-shapes', route => route.fulfill({ json: DOCS['gtfs-shapes'] }))
   await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: DOCS['gtfs-stops'] }))
   await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: DOCS['gtfs-stoptimes'] }))
-  await page.route('**/api/v1/datasets/gtfs-shapes/lines*', route => route.fulfill({ json: SHAPES_GEOJSON }))
+  await page.route('**/api/v1/datasets/gtfs-shapes/lines*', async route => {
+    if (options.shapesDelayMs) await new Promise(resolve => setTimeout(resolve, options.shapesDelayMs))
+    await page.evaluate(() => { (window as any).__shapesAt = Date.now() })
+    await route.fulfill({ json: SHAPES_GEOJSON })
+  })
   await page.route('**/api/v1/datasets/gtfs-stops/lines*', route => route.fulfill({ json: STOPS_GEOJSON }))
   await page.route('**/metadata-attachments/gtfs-rt.protobuf*', route => route.fulfill({
     contentType: 'application/octet-stream',

@@ -35,6 +35,8 @@ const emit = defineEmits<{
 const container = ref<HTMLElement>()
 let map: maplibregl.Map | null = null
 let loaded = false
+// les handlers liés à une couche survivent à setStyle : ne les enregistrer qu'une fois
+let interactionsBound = false
 
 const LINES_SOURCE = 'gtfs-shapes'
 const STOPS_SOURCE = 'gtfs-stops'
@@ -249,7 +251,8 @@ function openPopup (component: any, componentProps: any, lngLat: maplibregl.LngL
 }
 
 function bindInteractions () {
-  if (!map) return
+  if (!map || interactionsBound) return
+  interactionsBound = true
 
   const cursor = (layer: string) => {
     map!.on('mouseenter', layer, () => { if (map) map.getCanvas().style.cursor = 'pointer' })
@@ -311,6 +314,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   map?.remove()
   map = null
+  interactionsBound = false
 })
 
 watch(() => props.styleUrl, () => {
@@ -344,6 +348,8 @@ watch(() => props.fitKey, () => {
   <div
     ref="container"
     class="gtfs-map"
+    role="region"
+    aria-label="Carte du réseau de transport"
   />
 </template>
 

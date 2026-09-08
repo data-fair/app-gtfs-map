@@ -3,12 +3,17 @@ import type { Application, Dataset } from '@data-fair/lib-common-types/applicati
 import type { Config } from '@/config/index.js'
 
 export interface ConfigState {
-  application: Application
+  application: Application & { href: string, apiUrl: string, exposedUrl?: string }
   config: Ref<Config>
   setConfig: (newConfig: Config) => void
   notifyConfigChange: (field: string, value: unknown) => void
   dataset: ComputedRef<Dataset | undefined>
   error: ComputedRef<string | null>
+}
+
+/** Vrai quand l'application est servie par data-fair en mode brouillon de configuration. */
+export function isDraftMode (search = window.location.search): boolean {
+  return new URLSearchParams(search).get('draft') === 'true'
 }
 
 export function createConfig () {

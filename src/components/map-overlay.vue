@@ -38,8 +38,10 @@ function selectRoute (routeId: string) {
 <template>
   <div class="map-overlay">
     <div class="overlay-card">
-      <div
+      <button
         class="overlay-header"
+        type="button"
+        :aria-expanded="expanded"
         @click="expanded = !expanded"
       >
         <v-icon
@@ -47,7 +49,7 @@ function selectRoute (routeId: string) {
           size="small"
         />
         <span class="overlay-title">{{ title }}</span>
-      </div>
+      </button>
       <div
         v-if="expanded"
         class="overlay-body"
@@ -141,8 +143,14 @@ function selectRoute (routeId: string) {
   display: flex;
   align-items: center;
   gap: 4px;
+  width: 100%;
   padding: 8px 12px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-weight: 600;
+  text-align: left;
   cursor: pointer;
   user-select: none;
 }

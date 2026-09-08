@@ -1,14 +1,19 @@
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+import { contrastTextColor } from '@/composables/gtfs.js'
+
+const props = defineProps<{
   routeName: string
   color: string
 }>()
+
+const textColor = computed(() => contrastTextColor(props.color))
 </script>
 
 <template>
   <span
     class="route-badge"
-    :style="{ backgroundColor: color }"
+    :style="{ backgroundColor: color, color: textColor }"
   >{{ routeName }}</span>
 </template>
 
@@ -18,10 +23,8 @@ defineProps<{
   min-width: 2em;
   padding: 0.1em 0.5em;
   border-radius: 1em;
-  color: #fff;
   font-weight: 600;
   font-size: 0.85em;
   text-align: center;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.35);
 }
 </style>

@@ -1,6 +1,36 @@
 import { expect, test } from '@playwright/test'
 import type { FeatureCollection } from 'geojson'
-import { applyFallbackColor, buildRouteIndex, classifyDataset, findRealtimeUrl, kindToConfigField, normalizeColor, parseGtfsTime, selectDepartures } from '../../src/composables/gtfs'
+import {
+  applyFallbackColor,
+  buildDeparturesUrl,
+  buildRouteIndex,
+  classifyDataset,
+  contrastTextColor,
+  datasetDocUrl,
+  findRealtimeUrl,
+  hasRealtimeAttachment,
+  isTruncated,
+  kindToConfigField,
+  linksBackTo,
+  normalizeColor,
+  parseGtfsTime,
+  selectDepartures
+} from '../../src/composables/gtfs'
+
+test.describe('URLs API', () => {
+  test('datasetDocUrl s\'appuie sur apiUrl, jamais sur un chemin relatif', () => {
+    expect(datasetDocUrl('https://host/data-fair/api/v1', 'abc')).toBe('https://host/data-fair/api/v1/datasets/abc')
+    expect(datasetDocUrl('https://host/data-fair/api/v1/', 'abc')).toBe('https://host/data-fair/api/v1/datasets/abc')
+  })
+
+  test('buildDeparturesUrl filtre l\'arrêt avec le suffixe _eq', () => {
+    const url = buildDeparturesUrl('https://host/api/v1/datasets/horaires', 'S1', new Date(2026, 8, 9, 10, 30))
+    expect(url).toContain('stop_id_eq=S1')
+    expect(url).not.toMatch(/[?&]stop_id=/)
+    expect(url).toContain('arrival_time_gte=10%3A30%3A00')
+    expect(url).toContain('sort=arrival_time:1')
+  })
+})
 
 test.describe('classifyDataset', () => {
   test('classe les trois jeux liés d\'après leur schéma', () => {
@@ -58,6 +88,32 @@ test.describe('findRealtimeUrl', () => {
     expect(findRealtimeUrl({ id: 'x', attachments: [{ type: 'file', name: 'a.txt' }] })).toBeNull()
     expect(findRealtimeUrl({ id: 'x' })).toBeNull()
   })
+
+  test('ignore une pièce jointe distante qui n\'est pas le flux gtfs-rt', () => {
+    expect(findRealtimeUrl({ id: 'x', attachments: [{ type: 'remoteFile', name: 'autre.flux' }] })).toBeNull()
+  })
+
+  test('hasRealtimeAttachment ne retient que le flux gtfs-rt distant', () => {
+    expect(hasRealtimeAttachment({ id: 'x', attachments: [{ type: 'remoteFile', name: 'gtfs-rt.protobuf' }] })).toBe(true)
+    expect(hasRealtimeAttachment({ id: 'x', attachments: [{ type: 'remoteFile', name: 'autre.flux' }] })).toBe(false)
+    expect(hasRealtimeAttachment({ id: 'x', attachments: [{ type: 'file', name: 'gtfs-rt.protobuf' }] })).toBe(false)
+  })
+})
+
+test.describe('famille de jeux', () => {
+  test('linksBackTo exige un lien retour vers le jeu sélectionné', () => {
+    expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, 'meta')).toBe(true)
+    expect(linksBackTo({ relatedDatasets: [{ id: 'autre' }] }, 'meta')).toBe(false)
+    expect(linksBackTo({}, 'meta')).toBe(false)
+    expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, undefined)).toBe(false)
+  })
+
+  test('isTruncated compare le total au nombre d\'objets renvoyés', () => {
+    expect(isTruncated(10001, 10000)).toBe(true)
+    expect(isTruncated(10000, 10000)).toBe(false)
+    expect(isTruncated(null, 10)).toBe(false)
+    expect(isTruncated(undefined, 10)).toBe(false)
+  })
 })
 
 test.describe('couleurs GTFS', () => {
@@ -97,6 +153,13 @@ test.describe('couleurs GTFS', () => {
     expect(index.size).toBe(2)
     expect(index.get('A')).toMatchObject({ shortName: '1', longName: 'Gare - Plage', color: '#FF8800' })
     expect(index.get('B')?.color).toBe('#1976D2')
+  })
+
+  test('contrastTextColor choisit un texte lisible selon la luminance', () => {
+    expect(contrastTextColor('#FFFFFF')).toBe('#111111')
+    expect(contrastTextColor('#000000')).toBe('#ffffff')
+    expect(contrastTextColor('FF8800')).toBe('#111111')
+    expect(contrastTextColor('nawak')).toBe('#ffffff')
   })
 })
 

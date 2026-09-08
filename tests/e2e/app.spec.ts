@@ -26,6 +26,20 @@ test.describe('app-gtfs-map', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__captureCalled)).toBe(true)
   })
 
+  test('déclenche la capture seulement après le rendu des couches', async ({ page }) => {
+    await mockApp(page, { shapesDelayMs: 800 })
+    await page.goto('/')
+
+    await expect.poll(() => page.evaluate(() => (window as any).__captureCalled)).toBe(true)
+    const { captureAt, shapesAt } = await page.evaluate(() => ({
+      captureAt: (window as any).__captureAt as number,
+      shapesAt: (window as any).__shapesAt as number
+    }))
+    // contrôle négatif : sans l'attente des couches, la capture part avant la réponse des tracés
+    expect(shapesAt).toBeGreaterThan(0)
+    expect(captureAt).toBeGreaterThanOrEqual(shapesAt)
+  })
+
   test('signale une configuration inexploitable sans jeu lié « tracés » ni « arrêts »', async ({ page }) => {
     await mockApp(page, { withoutRelated: true, withoutRealtime: true })
     await page.goto('/')

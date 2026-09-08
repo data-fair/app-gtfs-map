@@ -52,16 +52,40 @@ export const kindToConfigField = (kind: ResourceKind) =>
   ({ shapes: 'shapesDataset', stops: 'stopsDataset', 'stop-times': 'stopTimesDataset' })[kind]
 
 /**
+ * URL d'un document de jeu de données.
+ *
+ * `apiUrl` (injecté par le proxy data-fair et par le dev-server) est la seule base
+ * fiable : l'application est servie sous `/app/{id}`, où une URL relative `api/v1/...`
+ * partirait sur `/app/api/v1/...`.
+ */
+export function datasetDocUrl (apiUrl: string, id: string): string {
+  return `${apiUrl.replace(/\/$/, '')}/datasets/${encodeURIComponent(id)}`
+}
+
+/** Vrai si la pièce jointe est le flux GTFS-RT déclaré par le traitement. */
+export const isRealtimeAttachment = (attachment: { type?: string, name?: string }): boolean =>
+  attachment.type === 'remoteFile' && /^gtfs-rt/i.test(attachment.name ?? '')
+
+/** Vrai si `doc` référence le jeu `selectedId` (liens bidirectionnels posés par le traitement). */
+export const linksBackTo = (doc: { relatedDatasets?: Array<{ id: string }> }, selectedId: string | undefined): boolean =>
+  !!selectedId && (doc.relatedDatasets ?? []).some(r => r.id === selectedId)
+
+/** Vrai si le document porte le flux GTFS-RT déclaré par le traitement. */
+export const hasRealtimeAttachment = (doc: MetadataDoc): boolean =>
+  (doc.attachments ?? []).some(isRealtimeAttachment)
+
+/**
  * URL de la pièce jointe distante du flux GTFS-RT, à travers le proxy data-fair
  * (l'URL réelle du flux n'est jamais exposée au navigateur, pas de contrainte CORS).
+ * Seules les pièces jointes préfixées `gtfs-rt` sont retenues : un autre fichier distant
+ * ajouté à la main ne doit pas être décodé comme du protobuf.
  */
 export function findRealtimeUrl (doc: MetadataDoc): string | null {
-  const attachments = doc.attachments ?? []
-  const remote = attachments.filter(a => a.type === 'remoteFile')
-  const rt = remote.find(a => /^gtfs-rt/i.test(a.name)) ?? remote[0]
+  const rt = (doc.attachments ?? []).find(isRealtimeAttachment)
   if (!rt) return null
+  if (!doc.href && !doc.id) return null
   const base = doc.href ?? `api/v1/datasets/${doc.id}`
-  return `${base}/metadata-attachments/${rt.name}`
+  return `${base}/metadata-attachments/${encodeURIComponent(rt.name)}`
 }
 
 /** Extrait une couleur CSS d'une valeur GTFS route_color (« 00AAFF » ou « #00AAFF »). */
@@ -71,16 +95,44 @@ export function normalizeColor (raw?: string | null): string | null {
   return v.startsWith('#') ? v : `#${v}`
 }
 
+/** Couleur de texte lisible (WCAG) sur un fond hexadécimal donné. */
+export function contrastTextColor (raw?: string | null): string {
+  const hex = normalizeColor(raw)
+  if (!hex) return '#ffffff'
+  const channel = (value: number) => {
+    const s = value / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+  // 0.179 = luminance limite pour un contraste 4.5:1 avec noir ou blanc
+  return luminance > 0.179 ? '#111111' : '#ffffff'
+}
+
 /* ------------------------------------------------------------------ */
 /* Chargement des couches géographiques                                */
 /* ------------------------------------------------------------------ */
 
 const API_SIZE = 10000
 
-export async function loadGeoJson (href: string): Promise<FeatureCollection> {
-  const result = await fetchJson<FeatureCollection>(`${href}/lines?format=geojson&size=${API_SIZE}`)
+export interface GeoJsonLayer {
+  collection: FeatureCollection
+  /** total de lignes côté serveur, quand l'API le renvoie */
+  total: number | null
+  /** l'API a renvoyé moins d'objets que le total (plafond de pagination atteint) */
+  truncated: boolean
+}
+
+export const isTruncated = (total: number | null | undefined, count: number): boolean =>
+  typeof total === 'number' && total > count
+
+export async function loadGeoJson (href: string): Promise<GeoJsonLayer> {
+  const result = await fetchJson<FeatureCollection & { total?: number }>(`${href}/lines?format=geojson&size=${API_SIZE}`)
   result.features = (result.features ?? []).filter(f => f.geometry)
-  return result
+  const total = typeof result.total === 'number' ? result.total : null
+  return { collection: result, total, truncated: isTruncated(total, result.features.length) }
 }
 
 /** Normalise la couleur des tracés d'après route_color, avec repli. */
@@ -176,6 +228,18 @@ export function selectDepartures (rows: any[], now: Date): Departure[] {
 }
 
 /**
+ * URL de recherche des passages d'un arrêt.
+ *
+ * Le suffixe `_eq` est obligatoire : l'API search de data-fair ne reconnaît que les
+ * suffixes `_eq`, `_in`, `_gte`, ... — une clé nue est silencieusement ignorée et la
+ * requête repart sans filtre d'arrêt.
+ */
+export function buildDeparturesUrl (stopTimesHref: string, stopId: string, now: Date = new Date()): string {
+  const minTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
+  return `${stopTimesHref}/lines?stop_id_eq=${encodeURIComponent(stopId)}&arrival_time_gte=${encodeURIComponent(minTime)}&sort=arrival_time:1&size=200`
+}
+
+/**
  * Prochains passages d'un arrêt aujourd'hui.
  * Le filtre serveur (égalité stop_id, heures >= maintenant en comparaison lexicographique,
  * valide pour des heures « HH:MM:SS ») est complété côté client par la validité du service.
@@ -185,9 +249,6 @@ export async function loadDepartures (
   stopId: string,
   now: Date = new Date()
 ): Promise<Departure[]> {
-  const minTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
-  const result = await fetchJson<{ results?: any[] }>(
-    `${stopTimesHref}/lines?stop_id=${encodeURIComponent(stopId)}&arrival_time_gte=${encodeURIComponent(minTime)}&sort=arrival_time:1&size=200`
-  )
+  const result = await fetchJson<{ results?: any[] }>(buildDeparturesUrl(stopTimesHref, stopId, now))
   return selectDepartures(result.results ?? [], now)
 }

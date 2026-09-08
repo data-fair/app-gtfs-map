@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef, watch, type Ref } from 'vue'
 import type { FeatureCollection } from 'geojson'
 import DfUiNotif from '@data-fair/lib-vuetify/ui-notif.vue'
 import { useUiNotif } from '@data-fair/lib-vue/ui-notif.js'
-import { useConfig } from './composables/config'
+import { isDraftMode, useConfig } from './composables/config'
 import { useFamily } from './composables/use-family'
 import { applyFallbackColor, buildRouteIndex, loadGeoJson, type LinkedRef } from './composables/gtfs'
 import { useVehicles } from './composables/use-vehicles'
@@ -18,27 +18,52 @@ const family = useFamily()
 /* Chargement des couches statiques                                    */
 /* ------------------------------------------------------------------ */
 
+type LayerStatus = 'idle' | 'loading' | 'done' | 'error'
+
 const rawShapes = shallowRef<FeatureCollection | null>(null)
 const rawStops = shallowRef<FeatureCollection | null>(null)
+const shapesStatus = ref<LayerStatus>('idle')
+const stopsStatus = ref<LayerStatus>('idle')
 
 const fallbackColor = computed(() => (config.value as any)?.map?.fallbackColor ?? '#1976D2')
 const shapes = computed(() => rawShapes.value ? applyFallbackColor(rawShapes.value, fallbackColor.value) : null)
 const routeIndex = computed(() => buildRouteIndex(shapes.value, fallbackColor.value))
 
-async function loadLayer (dataset: LinkedRef | undefined, target: typeof rawShapes) {
+/** Les deux chargements de couches sont terminés (succès ou échec). */
+const layersSettled = computed(() =>
+  (shapesStatus.value === 'done' || shapesStatus.value === 'error') &&
+  (stopsStatus.value === 'done' || stopsStatus.value === 'error') &&
+  // tant que la famille n'est pas résolue, un `href` encore absent n'est pas un état final
+  (family.resolved.value || !!family.error.value ||
+    !!family.shapesDataset.value?.href || !!family.stopsDataset.value?.href))
+
+async function loadLayer (dataset: LinkedRef | undefined, target: typeof rawShapes, status: Ref<LayerStatus>) {
   if (!dataset?.href) {
     target.value = null
+    status.value = 'done'
     return
   }
+  status.value = 'loading'
   try {
-    target.value = await loadGeoJson(dataset.href)
+    const { collection, truncated } = await loadGeoJson(dataset.href)
+    target.value = collection
+    if (truncated) {
+      sendUiNotif({
+        type: 'warning',
+        msg: `La couche « ${dataset.title} » est incomplète : seuls les ${collection.features.length} premiers objets sont affichés.`
+      })
+    }
+    status.value = 'done'
   } catch (err: any) {
+    status.value = 'error'
     sendUiNotif({ type: 'error', msg: `Échec du chargement de la couche « ${dataset.title} »`, error: err })
   }
 }
 
-watch(() => family.shapesDataset.value, (ds) => loadLayer(ds, rawShapes), { immediate: true })
-watch(() => family.stopsDataset.value, (ds) => loadLayer(ds, rawStops), { immediate: true })
+// surveille le href (et non l'objet) : l'echo set-config du draft renvoie un nouvel objet
+// à chaque sauvegarde, ce qui relancerait inutilement le téléchargement des couches
+watch(() => family.shapesDataset.value?.href, () => loadLayer(family.shapesDataset.value, rawShapes, shapesStatus), { immediate: true })
+watch(() => family.stopsDataset.value?.href, () => loadLayer(family.stopsDataset.value, rawStops, stopsStatus), { immediate: true })
 
 /* ------------------------------------------------------------------ */
 /* Véhicules temps réel                                                */
@@ -85,8 +110,11 @@ watch(() => family.metadataDataset.value?.id, () => {
 
 const mapReady = ref(false)
 const familyError = computed(() => {
+  const hasLayers = !!family.shapesDataset.value || !!family.stopsDataset.value
+  // l'erreur de résolution n'est affichée que si la configuration n'a pas déjà des couches
+  if (family.error.value && !hasLayers) return family.error.value
   if (!family.resolved.value) return null
-  if (!family.shapesDataset.value && !family.stopsDataset.value) {
+  if (!hasLayers) {
     return 'Aucun jeu lié « tracés » ou « arrêts » n\'a été trouvé : sélectionnez un jeu de données produit par le traitement GTFS.'
   }
   return null
@@ -104,19 +132,27 @@ const displayError = computed(() => error.value ?? familyError.value ?? undefine
 /* ------------------------------------------------------------------ */
 
 let captureCalled = false
-watch([mapReady, lastUpdated], () => {
-  const hasRealtime = !!realtimeUrl.value && realtimeEnabled.value
-  const settled = !hasRealtime || lastUpdated.value != null || vehiclesError.value != null
-  if (!captureCalled && mapReady.value && settled) {
+watch([mapReady, lastUpdated, layersSettled, displayError], () => {
+  if (captureCalled) return
+  // configuration inexploitable : capturer quand même pour ne pas attendre le timeout du service
+  if (displayError.value) {
     captureCalled = true
-    // la carte et, le cas échéant, les véhicules sont rendus : image représentative
     window.triggerCapture?.(false)
+    return
+  }
+  const hasRealtime = !!realtimeUrl.value && realtimeEnabled.value
+  const realtimeSettled = !hasRealtime || lastUpdated.value != null || vehiclesError.value != null
+  if (mapReady.value && layersSettled.value && realtimeSettled) {
+    captureCalled = true
+    // laisse passer le fitBounds déclenché par l'arrivée des tracés
+    requestAnimationFrame(() => window.triggerCapture?.(false))
   }
 }, { immediate: true })
 
-// rapport d'erreur de configuration (mode draft)
+// rapport d'erreur de configuration : uniquement en mode draft, sinon un POST réussi
+// ferait passer l'application en erreur (cf. contrat POST {application.href}/error)
 watch(error, (message) => {
-  if (message && window.parent !== window) {
+  if (message && isDraftMode() && window.parent !== window) {
     fetch(window.APPLICATION.href + '/error', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
