@@ -23,7 +23,7 @@
               },
               "layout": {
                 "getItems": {
-                  "url": "api/v1/datasets?status=finalized&q={q}&select=id,title,schema&sort=createdAt:-1&size=50",
+                  "url": "api/v1/datasets?status=finalized&q={q}&select=id,title,schema&size=100",
                   "itemKey": "data[\"href\"]",
                   "itemTitle": "data[\"title\"]",
                   "itemsResults": "data[\"results\"]"
