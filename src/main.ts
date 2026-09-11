@@ -6,9 +6,15 @@ import { createSession } from '@data-fair/lib-vue/session.js'
 import { vuetifySessionOptions } from '@data-fair/lib-vuetify'
 import { createUiNotif } from '@data-fair/lib-vue/ui-notif.js'
 import { createLocaleDayjs } from '@data-fair/lib-vue/locale-dayjs.js'
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 import App from './App.vue'
 import { createConfig } from './composables/config'
+
+// shim v-iframe-compat injecté par DataFair (d-frame, portail/dashboard) : sans
+// cette exposition, chaque updateSrc du parent retombe sur window.location.href
+// → rechargement complet de l'iframe → clignotement. Au niveau module, avant createApp.
+window.vIframeOptions = { reactiveParams: reactiveSearchParams }
 
 async function init () {
   // vuetifySessionOptions lève sans session.site.value : le <script> _public.js

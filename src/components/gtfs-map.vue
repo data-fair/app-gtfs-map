@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import * as maplibregl from 'maplibre-gl'
 import type { GeoJSONSource, LngLatBoundsLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl'
 import type { Feature, FeatureCollection, Point } from 'geojson'
@@ -69,12 +70,14 @@ const urlView: { center: [number, number], zoom: number } | null = (() => {
   return { center: [lng, lat], zoom }
 })()
 
-function persistView () {
+// debounce : un geste continu (molette, pincement) émet de nombreux moveend, et
+// chaque écriture d'URL envoie un stateChange au parent (portail, dashboard)
+const persistView = useDebounceFn(() => {
   if (!map) return
   reactiveSearchParams.lng = map.getCenter().lng.toFixed(6)
   reactiveSearchParams.lat = map.getCenter().lat.toFixed(6)
   reactiveSearchParams.zoom = map.getZoom().toFixed(2)
-}
+}, 250)
 
 // expressions maplibre : tableaux typés « large » pour contourner les unions d'expressions
 const lineColor = ['get', 'color'] as any
@@ -326,6 +329,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // persiste une éventuelle vue en attente avant de détruire la carte
+  persistView.flush()
   map?.remove()
   map = null
   interactionsBound = false
