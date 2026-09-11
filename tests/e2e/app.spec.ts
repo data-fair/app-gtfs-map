@@ -111,4 +111,34 @@ test.describe('app-gtfs-map', () => {
     expect(view!.lat).toBeCloseTo(47.2, 5)
     expect(view!.zoom).toBeCloseTo(13, 2)
   })
+
+  test('pré-remplit realtime.url depuis le lien public de la pièce jointe GTFS-RT', async ({ page }) => {
+    await mockApp(page)
+
+    // page parente jouant le rôle de data-fair en mode brouillon : dans une iframe
+    // window.parent !== window, donc l'app poste réellement ses mises à jour de config
+    await page.route('**/draft-parent*', route => route.fulfill({
+      contentType: 'text/html',
+      body: '<!DOCTYPE html><html><body><iframe src="/" style="width:100%;height:100vh;border:0"></iframe></body></html>'
+    }))
+    await page.addInitScript(() => {
+      ;(window as any).__setConfigs = []
+      window.addEventListener('message', (event) => {
+        if ((event.data as any)?.type === 'set-config') (window as any).__setConfigs.push(event.data.content)
+      })
+    })
+    await page.goto('/draft-parent')
+
+    // le lien public de la pièce jointe est poussé dans la configuration
+    await expect.poll(() => page.evaluate(() =>
+      ((window as any).__setConfigs as any[]).find(c => c.field === 'realtime.url')?.value
+    )).toBe('/api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf')
+
+    // la famille de jeux liés est poussée en même temps : sans le correctif DataCloneError
+    // l'exception interrompait resolve() avant ces deux messages
+    const datasets = await page.evaluate(() =>
+      ((window as any).__setConfigs as any[]).find(c => c.field === 'datasets')?.value?.map((d: any) => d.id)
+    )
+    expect(datasets).toEqual(['gtfs-meta', 'gtfs-shapes', 'gtfs-stops', 'gtfs-stoptimes'])
+  })
 })

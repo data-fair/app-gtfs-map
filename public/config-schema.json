@@ -20,12 +20,11 @@
                 "title": { "type": "string" },
                 "id": { "type": "string" },
                 "schema": { "type": "array" },
-                "finalizedAt": { "type": "string" },
                 "relatedDatasets": { "type": "array" }
               },
               "layout": {
                 "getItems": {
-                  "url": "api/v1/datasets?status=finalized&type=metaOnly&q={q}&select=id,title,schema,relatedDatasets&${context.datasetFilter}&size=50",
+                  "url": "api/v1/datasets?type=metaOnly&q={q}&select=id,title,schema,relatedDatasets&${context.datasetFilter}&size=50",
                   "itemKey": "data[\"href\"]",
                   "itemTitle": "data[\"title\"]",
                   "itemsResults": "data.results.filter(d => (d.relatedDatasets ?? []).length >= 3)"

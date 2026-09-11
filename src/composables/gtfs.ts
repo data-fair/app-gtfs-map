@@ -23,7 +23,7 @@ export interface MetadataDoc {
   title?: string
   href?: string
   relatedDatasets?: Array<{ id: string, title?: string }>
-  attachments?: Array<{ type: string, name: string, title?: string }>
+  attachments?: Array<{ type: string, name: string, title?: string, url?: string }>
 }
 
 const KIND_FIELDS: [ResourceKind, string[]][] = [
@@ -92,12 +92,16 @@ export const hasRealtimeAttachment = (doc: MetadataDoc): boolean =>
 /**
  * URL de la pièce jointe distante du flux GTFS-RT, à travers le proxy data-fair
  * (l'URL réelle du flux n'est jamais exposée au navigateur, pas de contrainte CORS).
+ * Le lien public calculé par data-fair (`attachment.url`) est prioritaire : lui seul
+ * tient compte du domaine public de l'instance. Reconstruction en repli pour les
+ * réponses qui ne le portent pas (mocks, instances anciennes).
  * Seules les pièces jointes préfixées `gtfs-rt` sont retenues : un autre fichier distant
  * ajouté à la main ne doit pas être décodé comme du protobuf.
  */
 export function findRealtimeUrl (doc: MetadataDoc): string | null {
   const rt = (doc.attachments ?? []).find(isRealtimeAttachment)
   if (!rt) return null
+  if (rt.url) return rt.url
   if (!doc.href && !doc.id) return null
   const base = doc.href ?? `api/v1/datasets/${doc.id}`
   return `${base}/metadata-attachments/${encodeURIComponent(rt.name)}`

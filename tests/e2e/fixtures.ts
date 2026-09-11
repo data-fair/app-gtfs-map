@@ -97,7 +97,12 @@ const DOCS: Record<string, any> = {
     ],
     attachments: [
       { type: 'file', name: 'gtfs.zip' },
-      { type: 'remoteFile', name: 'gtfs-rt.protobuf' }
+      {
+        type: 'remoteFile',
+        name: 'gtfs-rt.protobuf',
+        // lien public calculé par data-fair, proxifié vers l'URL réelle du flux
+        url: '/api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf'
+      }
     ]
   },
   'gtfs-shapes': {
@@ -165,7 +170,7 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
     }
   }, {
     appConfig: {
-      datasets: options.datasets ?? [{ id: 'gtfs-meta', href: '/api/v1/datasets/gtfs-meta', title: 'Réseau Test - métadonnées', finalizedAt: '2026-01-01T00:00:00.000Z' }]
+      datasets: options.datasets ?? [{ id: 'gtfs-meta', href: '/api/v1/datasets/gtfs-meta', title: 'Réseau Test - métadonnées' }]
     }
   })
 

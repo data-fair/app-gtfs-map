@@ -57,7 +57,23 @@ test.describe('classifyDataset', () => {
 })
 
 test.describe('findRealtimeUrl', () => {
-  test('construit l\'URL proxifiée de la pièce jointe distante gtfs-rt', () => {
+  test('préfère le lien public porté par la pièce jointe distante', () => {
+    const url = findRealtimeUrl({
+      id: 'gtfs-meta',
+      href: 'https://api.interne.example/api/v1/datasets/gtfs-meta',
+      attachments: [
+        { type: 'file', name: 'gtfs.zip' },
+        {
+          type: 'remoteFile',
+          name: 'gtfs-rt.protobuf',
+          url: 'https://data.example/api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf'
+        }
+      ]
+    })
+    expect(url).toBe('https://data.example/api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf')
+  })
+
+  test('reconstruit l\'URL proxifiée quand le lien public est absent', () => {
     const url = findRealtimeUrl({
       id: 'gtfs-meta',
       href: 'api/v1/datasets/gtfs-meta',

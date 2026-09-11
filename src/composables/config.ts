@@ -37,7 +37,10 @@ export function createConfig () {
     if (window.parent !== window) {
       window.parent.postMessage({
         type: 'set-config',
-        content: { field, value }
+        // les valeurs viennent de l'état réactif Vue : un Proxy (ex. le schéma d'un jeu
+        // lu dans config.value) ne passe pas le structured clone de postMessage
+        // (DataCloneError) et faisait échouer silencieusement toute la synchronisation
+        content: { field, value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) }
       }, window.location.origin)
     }
   }

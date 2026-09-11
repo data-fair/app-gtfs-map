@@ -119,7 +119,7 @@ export function useFamily () {
         .filter((entry): entry is LinkedRef => !!entry)
       if (linkedEntries.length) {
         const metadataRef: Record<string, unknown> = { id: dataset.id }
-        for (const key of ['href', 'title', 'schema', 'finalizedAt']) {
+        for (const key of ['href', 'title', 'schema']) {
           if (dataset[key] !== undefined) metadataRef[key] = dataset[key]
         }
         const desired = [metadataRef, ...linkedEntries]
