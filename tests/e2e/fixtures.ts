@@ -139,6 +139,8 @@ export interface MockOptions {
   withoutRelated?: boolean
   /** retarde la réponse du jeu « tracés » (ms), pour vérifier l'ordre capture/rendu */
   shapesDelayMs?: number
+  /** champs de configuration additionnels (panelPosition, largePanel...) */
+  config?: Record<string, unknown>
 }
 
 export async function mockApp (page: Page, options: MockOptions = {}) {
@@ -170,7 +172,8 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
     }
   }, {
     appConfig: {
-      datasets: options.datasets ?? [{ id: 'gtfs-meta', href: '/api/v1/datasets/gtfs-meta', title: 'Réseau Test - métadonnées' }]
+      datasets: options.datasets ?? [{ id: 'gtfs-meta', href: '/api/v1/datasets/gtfs-meta', title: 'Réseau Test - métadonnées' }],
+      ...options.config
     }
   })
 

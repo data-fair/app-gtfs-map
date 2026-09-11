@@ -142,6 +142,21 @@
               "layout": "color-picker"
             }
           }
+        },
+        "panelPosition": {
+          "type": "string",
+          "title": "Position du panneau de navigation",
+          "description": "Position du panneau latéral contenant la sélection et la légende sur écran large.",
+          "default": "right",
+          "oneOf": [
+            { "const": "left", "title": "Gauche" },
+            { "const": "right", "title": "Droite" }
+          ]
+        },
+        "largePanel": {
+          "type": "boolean",
+          "title": "Panneau de navigation plus large",
+          "default": false
         }
       }
     }

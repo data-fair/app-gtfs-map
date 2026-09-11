@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch, type Ref } from 'vue'
 import type { FeatureCollection } from 'geojson'
+import { mdiBus } from '@mdi/js'
 import DfUiNotif from '@data-fair/lib-vuetify/ui-notif.vue'
 import { useUiNotif } from '@data-fair/lib-vue/ui-notif.js'
 import { isDraftMode, useConfig } from './composables/config'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import { useFamily } from './composables/use-family'
 import { applyFallbackColor, buildRouteIndex, filterPlatformStops, loadGeoJson, type LinkedRef } from './composables/gtfs'
+import type { Selection } from './composables/selection'
 import { useVehicles } from './composables/use-vehicles'
-import GtfsMap from './components/gtfs-map.vue'
-import MapOverlay from './components/map-overlay.vue'
+import MapWrapper from './components/map-wrapper.vue'
 import styleOverrides from './assets/styles.json'
 
 const { config, error } = useConfig()
@@ -104,10 +105,12 @@ watch(vehiclesError, (message) => {
 })
 
 /* ------------------------------------------------------------------ */
-/* Sélection d'une ligne                                               */
+/* Sélection d'une ligne et détail dans le panneau                     */
 /* ------------------------------------------------------------------ */
 
 const highlightRouteId = ref<string | null>(reactiveSearchParams.route || null)
+// la ligne restaurée depuis l'URL ouvre directement son détail dans le panneau
+const selection = ref<Selection | null>(highlightRouteId.value ? { kind: 'route', routeId: highlightRouteId.value } : null)
 
 // ligne sélectionnée persistée dans l'URL : partage de lien et restauration au rafraîchissement
 watch(highlightRouteId, (value) => {
@@ -117,12 +120,34 @@ watch(highlightRouteId, (value) => {
 
 // lien périmé (la route n'existe plus dans le réseau) : ne pas filtrer la carte sur du vide
 watch([routeIndex, highlightRouteId], ([index, id]) => {
-  if (id && index.size && !index.has(id)) highlightRouteId.value = null
+  if (id && index.size && !index.has(id)) {
+    highlightRouteId.value = null
+    if (selection.value?.kind === 'route' && selection.value.routeId === id) selection.value = null
+  }
 })
 
 watch(() => family.metadataDataset.value?.id, () => {
   highlightRouteId.value = null
+  selection.value = null
 })
+
+// clic sur la carte : détail seulement, sans filtre des lignes
+function select (value: Selection) {
+  highlightRouteId.value = null
+  selection.value = value
+}
+
+// clic sur la carte vide : désélection complète (détail + filtre de légende)
+function clear () {
+  highlightRouteId.value = null
+  selection.value = null
+}
+
+// clic dans la légende : filtre la carte sur la ligne et ouvre son détail
+function selectRoute (routeId: string | null) {
+  highlightRouteId.value = routeId
+  selection.value = routeId ? { kind: 'route', routeId } : null
+}
 
 const mapReady = ref(false)
 const familyError = computed(() => {
@@ -179,41 +204,46 @@ watch(error, (message) => {
 </script>
 
 <template>
-  <template v-if="error || familyError">
-    <div class="empty-wrap">
-      <v-empty-state
-        :title="displayError"
-        headline="Configuration incomplète"
-        icon="mdi-bus"
+  <v-app>
+    <v-main>
+      <template v-if="error || familyError">
+        <div class="empty-wrap">
+          <v-empty-state
+            :title="displayError"
+            headline="Configuration incomplète"
+            :icon="mdiBus"
+          />
+        </div>
+      </template>
+      <MapWrapper
+        v-else
+        :shapes="shapes"
+        :stops="stops"
+        :vehicles="vehicles"
+        :route-index="routeIndex"
+        :style-url="styleUrl"
+        :line-width="(config as any)?.map?.lineWidth ?? 4"
+        :stop-radius="(config as any)?.map?.stopRadius ?? 5"
+        :vehicle-size="(config as any)?.map?.vehicleSize ?? 8"
+        :fit-key="family.metadataDataset.value?.id ?? null"
+        :highlight-route-id="highlightRouteId"
+        :title="title"
+        :routes="[...routeIndex.values()]"
+        :has-vehicles="!!realtimeUrl && realtimeEnabled"
+        :last-updated="lastUpdated"
+        :vehicle-count="vehicles.features.length"
+        :selection="selection"
+        :stop-times-href="family.stopTimesDataset.value?.href ?? null"
+        :panel-position="(config as any)?.panelPosition === 'left' ? 'left' : 'right'"
+        :large-panel="(config as any)?.largePanel === true"
+        @ready="mapReady = true"
+        @select="select"
+        @clear="clear"
+        @select-route="selectRoute"
       />
-    </div>
-  </template>
-  <template v-else>
-    <GtfsMap
-      :shapes="shapes"
-      :stops="stops"
-      :vehicles="vehicles"
-      :route-index="routeIndex"
-      :style-url="styleUrl"
-      :line-width="(config as any)?.map?.lineWidth ?? 4"
-      :stop-radius="(config as any)?.map?.stopRadius ?? 5"
-      :vehicle-size="(config as any)?.map?.vehicleSize ?? 8"
-      :stop-times-href="family.stopTimesDataset.value?.href ?? null"
-      :fit-key="family.metadataDataset.value?.id ?? null"
-      :highlight-route-id="highlightRouteId"
-      @ready="mapReady = true"
-    />
-    <MapOverlay
-      :title="title"
-      :routes="[...routeIndex.values()]"
-      :has-vehicles="!!realtimeUrl && realtimeEnabled"
-      :last-updated="lastUpdated"
-      :vehicle-count="vehicles.features.length"
-      :selected-route-id="highlightRouteId"
-      @select-route="highlightRouteId = $event"
-    />
-  </template>
-  <DfUiNotif />
+    </v-main>
+    <DfUiNotif />
+  </v-app>
 </template>
 
 <style scoped>

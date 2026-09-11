@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
-import { createApp } from 'vue'
-import maplibregl from 'maplibre-gl'
+import * as maplibregl from 'maplibre-gl'
 import type { GeoJSONSource, LngLatBoundsLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl'
 import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
-import RoutePopup from './route-popup.vue'
-import StopPopup from './stop-popup.vue'
-import VehiclePopup from './vehicle-popup.vue'
 import { gtfsInsertBeforeId, type RouteInfo } from '@/composables/gtfs.js'
+import type { Selection } from '@/composables/selection.js'
 import type { VehicleProperties } from '@/composables/use-vehicles.js'
+
+maplibregl.setWorkerUrl(workerUrl)
 
 const props = defineProps({
   shapes: { type: Object as PropType<FeatureCollection | null>, default: null },
@@ -21,13 +21,14 @@ const props = defineProps({
   lineWidth: { type: Number, default: 4 },
   stopRadius: { type: Number, default: 5 },
   vehicleSize: { type: Number, default: 8 },
-  stopTimesHref: { type: String as PropType<string | null>, default: null },
   fitKey: { type: String as PropType<string | null>, default: null },
   highlightRouteId: { type: String as PropType<string | null>, default: null }
 })
 
 const emit = defineEmits<{
   (e: 'ready'): void
+  (e: 'select', selection: Selection): void
+  (e: 'clear'): void
 }>()
 
 const container = ref<HTMLElement>()
@@ -260,19 +261,22 @@ function fitNetwork () {
 }
 
 /* ------------------------------------------------------------------ */
-/* Popups                                                              */
+/* Sélection                                                           */
 /* ------------------------------------------------------------------ */
 
-function openPopup (component: any, componentProps: any, lngLat: maplibregl.LngLatLike) {
-  if (!map) return
-  const containerEl = document.createElement('div')
-  const app = createApp(component, componentProps)
-  app.mount(containerEl)
-  const popup = new maplibregl.Popup({ closeButton: true, maxWidth: '320px', offset: 8 })
-    .setLngLat(lngLat)
-    .setDOMContent(containerEl)
-    .addTo(map)
-  popup.on('close', () => app.unmount())
+/** Convertit la feature rendue sous le curseur en sélection pour le panneau. */
+function selectionFromFeature (feature: MapGeoJSONFeature): Selection | null {
+  const p = feature.properties as Record<string, any>
+  switch (feature.layer.id) {
+    case VEHICLES_LAYER:
+      return { kind: 'vehicle', vehicleId: p.id ?? '', vehicle: p as unknown as VehicleProperties }
+    case STOPS_LAYER:
+      return { kind: 'stop', stopId: p.stop_id ?? '', stopName: p.stop_name ?? '', routes: p.routes ?? '' }
+    case LINES_HIT_LAYER:
+      return p.route_id ? { kind: 'route', routeId: p.route_id } : null
+    default:
+      return null
+  }
 }
 
 function bindInteractions () {
@@ -287,35 +291,15 @@ function bindInteractions () {
   cursor(STOPS_LAYER)
   cursor(VEHICLES_LAYER)
 
-  map.on('click', LINES_HIT_LAYER, (e) => {
-    const feature = e.features?.[0] as MapGeoJSONFeature | undefined
-    if (!feature) return
-    const p = feature.properties as Record<string, string>
-    openPopup(RoutePopup, {
-      routeId: p.route_id ?? '',
-      shortName: p.route_short_name || p.route_long_name || p.route_id || '',
-      longName: p.route_long_name ?? '',
-      color: p.color ?? '#1976D2'
-    }, e.lngLat)
-  })
-
-  map.on('click', STOPS_LAYER, (e) => {
-    const feature = e.features?.[0] as MapGeoJSONFeature | undefined
-    if (!feature) return
-    const p = feature.properties as Record<string, string>
-    openPopup(StopPopup, {
-      stopId: p.stop_id ?? '',
-      stopName: p.stop_name ?? '',
-      routes: p.routes ?? '',
-      stopTimesHref: props.stopTimesHref
-    }, e.lngLat)
-  })
-
-  map.on('click', VEHICLES_LAYER, (e) => {
-    const feature = e.features?.[0] as MapGeoJSONFeature | undefined
-    if (!feature) return
-    const p = feature.properties as unknown as VehicleProperties
-    openPopup(VehiclePopup, { vehicle: p }, e.lngLat)
+  // un seul handler : la feature la plus haute (véhicule > arrêt > ligne) gagne,
+  // et un clic sur la carte vide désélectionne
+  map.on('click', (e) => {
+    const features = map!.queryRenderedFeatures(e.point, {
+      layers: [VEHICLES_LAYER, STOPS_LAYER, LINES_HIT_LAYER]
+    })
+    const selection = features[0] ? selectionFromFeature(features[0]) : null
+    if (selection) emit('select', selection)
+    else emit('clear')
   })
 }
 
@@ -325,7 +309,8 @@ onMounted(() => {
     container: container.value,
     style: props.styleUrl,
     ...(urlView ?? {}),
-    attributionControl: false
+    attributionControl: false,
+    zoomLevelsToOverscale: undefined
   })
   if (import.meta.env.DEV) window.__MAP__ = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')

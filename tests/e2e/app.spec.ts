@@ -1,5 +1,15 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { mockApp } from './fixtures'
+
+/** Clique sur la carte aux coordonnées géographiques données. */
+async function clickMapAt (page: Page, lngLat: [number, number]) {
+  const box = (await page.locator('.maplibregl-canvas').boundingBox())!
+  const point = await page.evaluate(([lng, lat]) => {
+    const p = window.__MAP__!.project([lng, lat])
+    return { x: p.x, y: p.y }
+  }, lngLat)
+  await page.mouse.click(box.x + point.x, box.y + point.y)
+}
 
 test.describe('app-gtfs-map', () => {
   test('résout la famille de jeux liés, affiche le réseau et les véhicules', async ({ page }) => {
@@ -9,18 +19,24 @@ test.describe('app-gtfs-map', () => {
     // la carte est rendue avec son canvas
     await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
 
-    // overlay : titre du réseau, sans commande d'affichage des couches
+    // panneau latéral : titre du réseau, sans commande d'affichage des couches
     // (tracés, arrêts et labels sont toujours affichés, plus aucun switch)
-    const overlay = page.locator('.map-overlay')
-    await expect(overlay).toBeVisible()
-    await expect(overlay.getByText('Réseau Test')).toBeVisible()
-    await expect(overlay.locator('.v-switch')).toHaveCount(0)
+    const panel = page.locator('.navigation-side')
+    await expect(panel).toBeVisible()
+    await expect(panel.getByText('Réseau Test')).toBeVisible()
+    await expect(panel.locator('.v-switch')).toHaveCount(0)
 
     // les 2 lignes du réseau sont listées avec leur badge
-    await expect(overlay.locator('.route-item')).toHaveCount(2)
+    await expect(panel.locator('.route-item')).toHaveCount(2)
 
     // les véhicules du flux temps réel sont comptés
-    await expect(overlay.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
+    await expect(panel.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
+
+    // par défaut le panneau est à droite : la carte occupe le bord gauche
+    const panelBox = (await panel.boundingBox())!
+    const canvasBox = (await page.locator('.maplibregl-canvas').boundingBox())!
+    expect(canvasBox.x).toBe(0)
+    expect(panelBox.x).toBeGreaterThan(canvasBox.x)
 
     // la capture data-fair est déclenchée une fois carte + véhicules rendus
     await expect.poll(() => page.evaluate(() => (window as any).__captureCalled)).toBe(true)
@@ -52,10 +68,10 @@ test.describe('app-gtfs-map', () => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
-    const overlay = page.locator('.map-overlay')
-    await expect(overlay).toBeVisible()
+    const panel = page.locator('.navigation-side')
+    await expect(panel).toBeVisible()
     // pas de statut temps réel sans flux (contrôle positif : le compteur apparaît avec flux)
-    await expect(overlay.locator('.rt-status')).toHaveCount(0)
+    await expect(panel.locator('.rt-status')).toHaveCount(0)
     // la carte reste utilisable (canvas rendu)
     await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
   })
@@ -77,9 +93,13 @@ test.describe('app-gtfs-map', () => {
     expect(view!.lat).toBeCloseTo(47.205, 5)
     expect(view!.zoom).toBeCloseTo(12, 2)
 
-    // la ligne restaurée est marquée sélectionnée dans l'overlay
+    // la ligne restaurée est marquée sélectionnée dans la légende
     await expect(page.locator('.route-item.selected')).toHaveCount(1)
     await expect(page.locator('.route-item.selected .route-badge')).toContainText('1')
+
+    // et son détail est ouvert dans la section Sélection
+    await expect(page.locator('.navigation-side').getByText('Ligne 1')).toBeVisible()
+    await expect(page.locator('.navigation-side').getByText('Gare - Plage')).toBeVisible()
   })
 
   test('reporte la navigation dans l\'URL, restaurée après rechargement', async ({ page }) => {
@@ -110,6 +130,89 @@ test.describe('app-gtfs-map', () => {
     expect(view!.lng).toBeCloseTo(-1.54, 5)
     expect(view!.lat).toBeCloseTo(47.2, 5)
     expect(view!.zoom).toBeCloseTo(13, 2)
+  })
+
+  test('le clic dans la légende filtre la carte et ouvre le détail de la ligne', async ({ page }) => {
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+
+    // le clic légende filtre les tracés sur la ligne choisie
+    await panel.locator('.route-item').first().click()
+    await expect(panel.getByText('Ligne 1')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines')))
+      .toEqual(['==', ['get', 'route_id'], 'A'])
+
+    // re-clic : la ligne est désélectionnée, le filtre levé et le détail refermé
+    await panel.locator('.route-item').first().click()
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines'))).toBe(true)
+    await expect(panel.getByText('Ligne 1')).toBeHidden()
+  })
+
+  test('le clic sur une ligne de la carte ouvre le détail sans filtrer', async ({ page }) => {
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+
+    await clickMapAt(page, [-1.53, 47.21])
+    await expect(panel.getByText('Ligne 1')).toBeVisible()
+
+    // aucun filtre appliqué par un clic carte
+    const filter = await page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines'))
+    expect(filter).toBe(true)
+
+    // clic sur la carte vide : le détail est refermé
+    await clickMapAt(page, [-1.5, 47.18])
+    await expect(panel.getByText('Ligne 1')).toBeHidden()
+  })
+
+  test('le clic sur un arrêt affiche son détail', async ({ page }) => {
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+
+    await clickMapAt(page, [-1.54, 47.205])
+    await expect(panel.getByText('Gare Centrale')).toBeVisible()
+  })
+
+  test('mobile : bottom nav pour la légende et le détail', async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 800 })
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+
+    await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
+    const nav = page.locator('.v-bottom-navigation')
+    await expect(nav).toBeVisible()
+    await expect(page.locator('.navigation-side')).toHaveCount(0)
+
+    // la carte laisse la place à la barre de navigation (56 px)
+    const canvasBox = (await page.locator('.maplibregl-canvas').boundingBox())!
+    expect(Math.round(canvasBox.height)).toBe(800 - 56)
+
+    // la feuille s'ouvre sur la légende au clic sur l'onglet
+    await nav.getByRole('button', { name: 'Légende' }).click()
+    await expect(page.locator('.route-item')).toHaveCount(2)
+
+    // le clic sur une ligne bascule sur l'onglet Sélection et ouvre le détail
+    await page.locator('.route-item').first().click()
+    await expect(page.locator('.v-bottom-sheet').getByText('Ligne 1')).toBeVisible()
+  })
+
+  test('positionne le panneau à gauche quand panelPosition vaut left', async ({ page }) => {
+    await mockApp(page, { withoutRealtime: true, config: { panelPosition: 'left' } })
+    await page.goto('/')
+
+    await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
+    const panelBox = (await page.locator('.navigation-side').boundingBox())!
+    const canvasBox = (await page.locator('.maplibregl-canvas').boundingBox())!
+    expect(panelBox.x).toBe(0)
+    expect(canvasBox.x).toBeGreaterThan(panelBox.x)
   })
 
   test('pré-remplit realtime.url depuis le lien public de la pièce jointe GTFS-RT', async ({ page }) => {

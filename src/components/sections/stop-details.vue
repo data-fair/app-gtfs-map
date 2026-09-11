@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import RouteBadge from './route-badge.vue'
+import RouteBadge from '../route-badge.vue'
 import { loadDepartures, type Departure } from '@/composables/gtfs.js'
 
 const props = defineProps<{
@@ -24,13 +24,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="gtfs-popup">
-    <div class="popup-title">
+  <div class="gtfs-details">
+    <div class="details-title">
       {{ stopName || 'Arrêt' }}
     </div>
     <div
       v-if="routes"
-      class="popup-line"
+      class="details-line"
     >
       <RouteBadge
         v-for="route in routes.split(';').filter(Boolean).slice(0, 12)"
@@ -41,24 +41,24 @@ onMounted(async () => {
       />
     </div>
     <template v-if="stopTimesHref">
-      <div class="popup-section">
+      <div class="details-section">
         Prochains passages
       </div>
       <div
         v-if="departures === null"
-        class="popup-line"
+        class="details-line"
       >
         Chargement…
       </div>
       <div
         v-else-if="loadError"
-        class="popup-line"
+        class="details-line"
       >
         Horaires indisponibles
       </div>
       <div
         v-else-if="!departures.length"
-        class="popup-line"
+        class="details-line"
       >
         Aucun passage à venir aujourd'hui
       </div>
@@ -88,22 +88,18 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.gtfs-popup {
-  font-family: inherit;
-  min-width: 200px;
-}
-.popup-title {
+.details-title {
   display: flex;
   align-items: center;
   font-weight: 600;
   margin-bottom: 0.25em;
 }
-.popup-line {
+.details-line {
   color: #555;
   font-size: 0.85em;
   margin-bottom: 0.25em;
 }
-.popup-section {
+.details-section {
   font-size: 0.75em;
   text-transform: uppercase;
   letter-spacing: 0.05em;
