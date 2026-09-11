@@ -76,6 +76,26 @@ test.describe('app-gtfs-map', () => {
     await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
   })
 
+  test('signale un flux GTFS-RT sans positions de véhicules (TripUpdate)', async ({ page }) => {
+    await mockApp(page, { feedKind: 'tripUpdate' })
+    await page.goto('/')
+
+    // le flux est bien récupéré mais inexploitable : l'utilisateur doit comprendre pourquoi
+    const panel = page.locator('.navigation-side')
+    await expect(panel.getByText(/TripUpdate/)).toBeVisible({ timeout: 10000 })
+
+    // la capture est déclenchée sans attendre de véhicules (contrôle positif : le premier test)
+    await expect.poll(() => page.evaluate(() => (window as any).__captureCalled)).toBe(true)
+  })
+
+  test('signale un flux GTFS-RT vide', async ({ page }) => {
+    await mockApp(page, { feedKind: 'empty' })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.getByText(/aucun véhicule/)).toBeVisible({ timeout: 10000 })
+  })
+
   test('restaure la position et la ligne sélectionnée depuis l\'URL', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/?lng=-1.53&lat=47.205&zoom=12&route=A')

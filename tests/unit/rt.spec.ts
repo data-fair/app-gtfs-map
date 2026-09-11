@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
-import { feedToVehicles, type VehicleCollection } from '../../src/composables/use-vehicles'
+import { decodeFeed, feedToVehicles, type VehicleCollection } from '../../src/composables/use-vehicles'
 
 // le paquet est CommonJS : import par défaut requis hors bundler
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
@@ -82,4 +82,45 @@ test('décode un flux vide', async () => {
   const result = feedToVehicles(buffer, routeIndex, fallbackColor)
   expect(result.type).toBe('FeatureCollection')
   expect(result.features).toHaveLength(0)
+})
+
+test('classe un flux avec positions de véhicules', async () => {
+  const buffer = buildFeed([
+    {
+      id: 'v1',
+      vehicle: {
+        trip: { routeId: 'ROUTE-A' },
+        position: { latitude: 47.1, longitude: -1.5 }
+      }
+    }
+  ])
+  const decoded = decodeFeed(buffer, routeIndex, fallbackColor)
+  expect(decoded.status).toBe('positions')
+  expect(decoded.collection.features).toHaveLength(1)
+  expect(decoded.counts).toEqual({ entities: 1, positions: 1, tripUpdates: 0 })
+})
+
+test('signale un flux TripUpdate sans positions', async () => {
+  const buffer = buildFeed([
+    { id: 't1', tripUpdate: { trip: { tripId: 't1', routeId: 'ROUTE-A' }, stopTimeUpdate: [] } },
+    { id: 't2', tripUpdate: { trip: { tripId: 't2', routeId: 'ROUTE-B' } } }
+  ])
+  const decoded = decodeFeed(buffer, routeIndex, fallbackColor)
+  expect(decoded.status).toBe('trip-update')
+  expect(decoded.collection.features).toHaveLength(0)
+  expect(decoded.counts).toEqual({ entities: 2, positions: 0, tripUpdates: 2 })
+})
+
+test('signale un flux décodé sans aucune entité', async () => {
+  const decoded = decodeFeed(buildFeed([]), routeIndex, fallbackColor)
+  expect(decoded.status).toBe('empty')
+  expect(decoded.collection.features).toHaveLength(0)
+  expect(decoded.counts.entities).toBe(0)
+})
+
+test('signale un flux de véhicules sans position comme vide', async () => {
+  const buffer = buildFeed([{ id: 'v1', vehicle: { trip: { routeId: 'ROUTE-A' } } }])
+  const decoded = decodeFeed(buffer, routeIndex, fallbackColor)
+  expect(decoded.status).toBe('empty')
+  expect(decoded.collection.features).toHaveLength(0)
 })

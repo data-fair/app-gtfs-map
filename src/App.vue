@@ -91,6 +91,7 @@ const realtimeUrl = computed<string | undefined>(() => family.realtimeUrl.value 
 const {
   vehicles,
   lastUpdated,
+  status: realtimeStatus,
   error: vehiclesError
 } = useVehicles({
   url: realtimeUrl,
@@ -98,6 +99,25 @@ const {
   intervalSeconds: refreshInterval,
   routeIndex,
   fallbackColor
+})
+
+// Un flux récupéré mais sans positions (vide ou TripUpdate) est un cas fréquent de
+// confusion : on l'explicite dans la légende au lieu d'afficher « 0 véhicule ».
+const realtimeMessage = computed(() => {
+  if (!realtimeUrl.value || !realtimeEnabled.value) return null
+  if (realtimeStatus.value === 'trip-update') {
+    return 'Ce flux GTFS-RT est au format TripUpdate : il ne contient pas de positions de véhicules.'
+  }
+  if (realtimeStatus.value === 'empty') {
+    return 'Le flux GTFS-RT ne contient aucun véhicule pour le moment.'
+  }
+  return null
+})
+
+watch(realtimeStatus, (value, previous) => {
+  if (value === 'trip-update' && previous !== 'trip-update') {
+    sendUiNotif({ type: 'warning', msg: realtimeMessage.value ?? '' })
+  }
 })
 
 watch(vehiclesError, (message) => {
@@ -231,6 +251,7 @@ watch(error, (message) => {
         :routes="[...routeIndex.values()]"
         :has-vehicles="!!realtimeUrl && realtimeEnabled"
         :last-updated="lastUpdated"
+        :realtime-message="realtimeMessage"
         :vehicle-count="vehicles.features.length"
         :selection="selection"
         :stop-times-href="family.stopTimesDataset.value?.href ?? null"

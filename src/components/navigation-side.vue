@@ -13,6 +13,7 @@ const props = defineProps<{
   routes: RouteInfo[]
   hasVehicles: boolean
   lastUpdated: number | null
+  realtimeMessage: string | null
   vehicleCount: number
   selectedRouteId: string | null
   selection: Selection | null
@@ -79,6 +80,7 @@ watch(() => props.selection, (value) => {
           :routes="routes"
           :has-vehicles="hasVehicles"
           :last-updated="lastUpdated"
+          :realtime-message="realtimeMessage"
           :vehicle-count="vehicleCount"
           :selected-route-id="selectedRouteId"
           @select-route="emit('select-route', $event)"

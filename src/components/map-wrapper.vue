@@ -24,6 +24,7 @@ const props = defineProps<{
   routes: RouteInfo[]
   hasVehicles: boolean
   lastUpdated: number | null
+  realtimeMessage: string | null
   vehicleCount: number
   selection: Selection | null
   stopTimesHref: string | null
@@ -76,6 +77,7 @@ const mapColsXl = computed(() => 12 - panelColsXl.value)
       :routes="routes"
       :has-vehicles="hasVehicles"
       :last-updated="lastUpdated"
+      :realtime-message="realtimeMessage"
       :vehicle-count="vehicleCount"
       :selected-route-id="highlightRouteId"
       :selection="selection"
@@ -103,6 +105,7 @@ const mapColsXl = computed(() => 12 - panelColsXl.value)
         :routes="routes"
         :has-vehicles="hasVehicles"
         :last-updated="lastUpdated"
+        :realtime-message="realtimeMessage"
         :vehicle-count="vehicleCount"
         :selected-route-id="highlightRouteId"
         :selection="selection"
@@ -153,6 +156,7 @@ const mapColsXl = computed(() => 12 - panelColsXl.value)
         :routes="routes"
         :has-vehicles="hasVehicles"
         :last-updated="lastUpdated"
+        :realtime-message="realtimeMessage"
         :vehicle-count="vehicleCount"
         :selected-route-id="highlightRouteId"
         :selection="selection"

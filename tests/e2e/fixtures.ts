@@ -68,18 +68,34 @@ export const STOPS_GEOJSON = {
   ]
 }
 
-/** Encode un flux GTFS-RT VehiclePositions minimal avec n véhicules. */
-export function buildRtFeed (vehicles: Array<{ id: string, routeId: string, lat: number, lng: number }>): Buffer {
+export type RtFeedKind = 'positions' | 'tripUpdate' | 'empty'
+
+/** Encode un flux GTFS-RT minimal : positions de véhicules (défaut), TripUpdate seul ou flux vide. */
+export function buildRtFeed (
+  vehicles: Array<{ id: string, routeId: string, lat: number, lng: number }>,
+  kind: RtFeedKind = 'positions'
+): Buffer {
+  const entity = kind === 'empty'
+    ? []
+    : vehicles.map(v => kind === 'tripUpdate'
+      ? {
+          id: v.id,
+          tripUpdate: {
+            trip: { tripId: v.id, routeId: v.routeId },
+            stopTimeUpdate: [{ stopSequence: 1, stopId: 'S1' }]
+          }
+        }
+      : {
+          id: v.id,
+          vehicle: {
+            trip: { routeId: v.routeId },
+            position: { latitude: v.lat, longitude: v.lng },
+            vehicle: { id: v.id }
+          }
+        })
   const message = transitRealtime.FeedMessage.fromObject({
     header: { gtfsRealtimeVersion: '2.0' },
-    entity: vehicles.map(v => ({
-      id: v.id,
-      vehicle: {
-        trip: { routeId: v.routeId },
-        position: { latitude: v.lat, longitude: v.lng },
-        vehicle: { id: v.id }
-      }
-    }))
+    entity
   })
   const bytes = transitRealtime.FeedMessage.encode(message).finish()
   return Buffer.from(bytes)
@@ -133,6 +149,8 @@ export interface MockOptions {
   datasets?: any[]
   /** nombre de véhicules dans le flux mocké (défaut 2) */
   vehicles?: number
+  /** type de flux temps réel mocké (défaut : positions de véhicules) */
+  feedKind?: RtFeedKind
   /** retire la pièce jointe distante du flux temps réel */
   withoutRealtime?: boolean
   /** retire les jeux liés du jeu de métadonnées */
@@ -195,7 +213,7 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
       routeId: i % 2 === 0 ? 'A' : 'B',
       lat: 47.2 + i * 0.005,
       lng: -1.55 + i * 0.005
-    })))
+    })), options.feedKind)
   }))
 }
 

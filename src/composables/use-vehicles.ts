@@ -22,15 +22,33 @@ export type VehicleCollection = FeatureCollection<Point, VehicleProperties>
 
 const EMPTY: VehicleCollection = { type: 'FeatureCollection', features: [] }
 
-/** Convertit un message GTFS-RT VehiclePositions en FeatureCollection. */
-export function feedToVehicles (
+/**
+ * État du flux temps réel décodé :
+ * - `positions` : au moins une position de véhicule exploitable ;
+ * - `trip-update` : flux TripUpdate, sans coordonnées (flux VehiclePositions attendu) ;
+ * - `empty` : flux décodé mais sans aucune entité ;
+ * - `error` : téléchargement ou décodage impossible ;
+ * - `idle` : pas de flux configuré ou affichage désactivé.
+ */
+export type RealtimeFeedStatus = 'idle' | 'positions' | 'empty' | 'trip-update' | 'error'
+
+export interface DecodedFeed {
+  collection: VehicleCollection
+  status: RealtimeFeedStatus
+  counts: { entities: number, positions: number, tripUpdates: number }
+}
+
+/** Décode un message GTFS-RT et classe le flux (positions, vide ou TripUpdate sans coordonnées). */
+export function decodeFeed (
   buffer: ArrayBuffer,
   routeIndex: Map<string, RouteInfo>,
   fallbackColor: string
-): VehicleCollection {
+): DecodedFeed {
   const feed = transitRealtime.FeedMessage.decode(new Uint8Array(buffer))
   const features: Feature<Point, VehicleProperties>[] = []
+  let tripUpdates = 0
   for (const entity of feed.entity ?? []) {
+    if (entity.tripUpdate) tripUpdates++
     const vp = entity.vehicle
     const position = vp?.position
     if (position == null || position.latitude == null || position.longitude == null) continue
@@ -51,7 +69,24 @@ export function feedToVehicles (
       }
     })
   }
-  return { type: 'FeatureCollection', features }
+  const collection: VehicleCollection = { type: 'FeatureCollection', features }
+  const status: RealtimeFeedStatus = features.length > 0
+    ? 'positions'
+    : tripUpdates > 0 ? 'trip-update' : 'empty'
+  return {
+    collection,
+    status,
+    counts: { entities: feed.entity?.length ?? 0, positions: features.length, tripUpdates }
+  }
+}
+
+/** Convertit un message GTFS-RT VehiclePositions en FeatureCollection. */
+export function feedToVehicles (
+  buffer: ArrayBuffer,
+  routeIndex: Map<string, RouteInfo>,
+  fallbackColor: string
+): VehicleCollection {
+  return decodeFeed(buffer, routeIndex, fallbackColor).collection
 }
 
 /**
@@ -67,6 +102,7 @@ export function useVehicles (options: {
 }) {
   const vehicles = shallowRef<VehicleCollection>(EMPTY)
   const lastUpdated = ref<number | null>(null)
+  const status = ref<RealtimeFeedStatus>('idle')
   const error = ref<string | null>(null)
 
   let timer: ReturnType<typeof setInterval> | undefined
@@ -88,10 +124,13 @@ export function useVehicles (options: {
     inFlight = true
     try {
       const buffer = await fetchBuffer(options.url.value)
-      vehicles.value = feedToVehicles(buffer, options.routeIndex.value, options.fallbackColor.value)
+      const decoded = decodeFeed(buffer, options.routeIndex.value, options.fallbackColor.value)
+      vehicles.value = decoded.collection
+      status.value = decoded.status
       lastUpdated.value = Date.now()
       error.value = null
     } catch (err: any) {
+      status.value = 'error'
       error.value = err?.message ?? String(err)
     } finally {
       inFlight = false
@@ -102,6 +141,7 @@ export function useVehicles (options: {
     stopTimer()
     if (!options.enabled.value || !options.url.value) {
       vehicles.value = EMPTY
+      status.value = 'idle'
       return
     }
     poll()
@@ -120,5 +160,5 @@ export function useVehicles (options: {
     document.removeEventListener('visibilitychange', onVisibility)
   })
 
-  return { vehicles, lastUpdated, error }
+  return { vehicles, lastUpdated, status, error }
 }

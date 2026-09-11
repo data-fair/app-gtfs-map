@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { mdiClockOutline } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiClockOutline } from '@mdi/js'
 import dayjs from 'dayjs'
 import RouteBadge from '../route-badge.vue'
 import type { RouteInfo } from '@/composables/gtfs.js'
@@ -10,6 +10,8 @@ const props = defineProps<{
   routes: RouteInfo[]
   hasVehicles: boolean
   lastUpdated: number | null
+  /** message expliquant un flux sans positions (vide ou TripUpdate) */
+  realtimeMessage: string | null
   vehicleCount: number
   /** ligne sélectionnée à l'extérieur de la légende (carte, URL) */
   selectedRouteId?: string | null
@@ -45,7 +47,14 @@ function selectRoute (routeId: string) {
       v-if="hasVehicles"
       class="rt-status"
     >
-      <template v-if="lastUpdatedLabel">
+      <template v-if="realtimeMessage">
+        <v-icon
+          :icon="mdiAlertCircleOutline"
+          size="x-small"
+        />
+        {{ realtimeMessage }}
+      </template>
+      <template v-else-if="lastUpdatedLabel">
         <v-icon
           :icon="mdiClockOutline"
           size="x-small"
