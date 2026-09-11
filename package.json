@@ -21,6 +21,7 @@
     "test": "df-dev-env && dotenv -- playwright test --max-failures=1",
     "test-unit": "playwright test --project unit",
     "test-e2e": "df-dev-env && dotenv -- playwright test --project e2e",
+    "replay-gif": "playwright test --config scripts/replay.config.ts",
     "quality": "npm run lint && npm run build-types && npm run type-check && npm run build && npm test && npm audit --omit=dev --audit-level=critical",
     "prepublishOnly": "npm run build"
   },

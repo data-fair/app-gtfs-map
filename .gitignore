@@ -5,3 +5,4 @@ dist
 src/config/.type
 tests/output
 playwright-report
+recordings
