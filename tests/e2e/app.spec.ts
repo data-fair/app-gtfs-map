@@ -164,11 +164,30 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText('Ligne 1')).toBeVisible()
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines')))
       .toEqual(['==', ['get', 'route_id'], 'A'])
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-vehicles-circle')))
+      .toEqual(['==', ['get', 'routeId'], 'A'])
 
     // re-clic : la ligne est désélectionnée, le filtre levé et le détail refermé
     await panel.locator('.route-item').first().click()
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines'))).toBe(true)
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-vehicles-circle'))).toBe(true)
     await expect(panel.getByText('Ligne 1')).toBeHidden()
+  })
+
+  test('le filtre de ligne restreint les véhicules et le compteur de la légende', async ({ page }) => {
+    await mockApp(page, { vehicles: 2 })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+    await expect(panel.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
+
+    // un véhicule par ligne dans le flux mocké : la ligne 1 n'en compte plus qu'un
+    await panel.locator('.route-item').first().click()
+    await expect(panel.getByText(/1 véhicule/)).toBeVisible({ timeout: 10000 })
+
+    await panel.locator('.route-item').first().click()
+    await expect(panel.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
   })
 
   test('le clic sur une ligne de la carte ouvre le détail sans filtrer', async ({ page }) => {

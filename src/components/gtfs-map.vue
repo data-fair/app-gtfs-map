@@ -217,6 +217,11 @@ function applyHighlight (fit = false) {
   for (const layer of [LINES_LAYER, LINES_HIT_LAYER]) {
     if (map.getLayer(layer)) map.setFilter(layer, filter)
   }
+  // les véhicules portent routeId (camelCase), pas route_id (propriété GTFS des tracés)
+  const vehicleFilter: any = props.highlightRouteId
+    ? ['==', ['get', 'routeId'], props.highlightRouteId]
+    : true
+  if (map.getLayer(VEHICLES_LAYER)) map.setFilter(VEHICLES_LAYER, vehicleFilter)
   // cadrage sur la ligne : à la sélection utilisateur, ou à la restauration d'un
   // lien qui porte la ligne sans position. Une vue URL complète prime toujours.
   if (fit && props.highlightRouteId) {

@@ -169,7 +169,14 @@ function selectRoute (routeId: string | null) {
   selection.value = routeId ? { kind: 'route', routeId } : null
 }
 
+// le compteur de la légende reflète le filtre de ligne actif
+const vehicleCount = computed(() => {
+  if (!highlightRouteId.value) return vehicles.value.features.length
+  return vehicles.value.features.filter(f => f.properties.routeId === highlightRouteId.value).length
+})
+
 const mapReady = ref(false)
+
 const familyError = computed(() => {
   const hasLayers = !!family.shapesDataset.value || !!family.stopsDataset.value
   // l'erreur de résolution n'est affichée que si la configuration n'a pas déjà des couches
@@ -252,7 +259,7 @@ watch(error, (message) => {
         :has-vehicles="!!realtimeUrl && realtimeEnabled"
         :last-updated="lastUpdated"
         :realtime-message="realtimeMessage"
-        :vehicle-count="vehicles.features.length"
+        :vehicle-count="vehicleCount"
         :selection="selection"
         :stop-times-href="family.stopTimesDataset.value?.href ?? null"
         :panel-position="(config as any)?.panelPosition === 'left' ? 'left' : 'right'"
