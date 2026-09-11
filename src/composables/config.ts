@@ -76,12 +76,12 @@ export function createConfig () {
           // - app → UI : { field, value } (update par path)
           if (content.configuration) {
             config.value = content.configuration
-          } else if (content.datasets || content.gtfsMap || content.realtime || content.map) {
+          } else if (content.datasets || content.realtime || content.map) {
             // Fusionner plutôt qu'écraser : certains émetteurs n'envoient
             // qu'un sous-arbre modifié (perte des champs frères sinon).
             config.value = { ...config.value, ...content }
           } else if (content.field && 'value' in content) {
-            // Update par path (ex: 'gtfsMap.stopsDataset')
+            // Update par path (ex: 'realtime.url')
             const newConfig = JSON.parse(JSON.stringify(config.value))
             setByPath(newConfig, content.field, content.value)
             config.value = newConfig

@@ -5,10 +5,11 @@ import maplibregl from 'maplibre-gl'
 import type { GeoJSONSource, LngLatBoundsLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl'
 import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import RoutePopup from './route-popup.vue'
 import StopPopup from './stop-popup.vue'
 import VehiclePopup from './vehicle-popup.vue'
-import type { RouteInfo } from '@/composables/gtfs.js'
+import { gtfsInsertBeforeId, type RouteInfo } from '@/composables/gtfs.js'
 import type { VehicleProperties } from '@/composables/use-vehicles.js'
 
 const props = defineProps({
@@ -17,12 +18,9 @@ const props = defineProps({
   vehicles: { type: Object as PropType<FeatureCollection<Point, VehicleProperties> | null>, default: null },
   routeIndex: { type: Map as PropType<Map<string, RouteInfo>>, required: true },
   styleUrl: { type: String, required: true },
-  showLines: { type: Boolean, default: true },
-  showStops: { type: Boolean, default: true },
-  showStopLabels: { type: Boolean, default: true },
-  showVehicles: { type: Boolean, default: true },
   lineWidth: { type: Number, default: 4 },
   stopRadius: { type: Number, default: 5 },
+  vehicleSize: { type: Number, default: 8 },
   stopTimesHref: { type: String as PropType<string | null>, default: null },
   fitKey: { type: String as PropType<string | null>, default: null },
   highlightRouteId: { type: String as PropType<string | null>, default: null }
@@ -35,6 +33,9 @@ const emit = defineEmits<{
 const container = ref<HTMLElement>()
 let map: maplibregl.Map | null = null
 let loaded = false
+// distingue le premier chargement d'un rechargement de style (setStyle) :
+// ce dernier préserve la caméra maplibre et ne doit pas recentrer sur le réseau
+let initialLoad = true
 // les handlers liés à une couche survivent à setStyle : ne les enregistrer qu'une fois
 let interactionsBound = false
 
@@ -49,6 +50,31 @@ const VEHICLES_LAYER = 'gtfs-vehicles-circle'
 
 const emptyFc = (): FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
+/* ------------------------------------------------------------------ */
+/* Navigation persistée dans l'URL (lng, lat, zoom)                    */
+/* ------------------------------------------------------------------ */
+
+function urlNumber (key: string): number | null {
+  const v = Number(reactiveSearchParams[key])
+  return Number.isFinite(v) ? v : null
+}
+
+// vue complète lue une seule fois au montage : centre/zoom initiaux de la carte
+const urlView: { center: [number, number], zoom: number } | null = (() => {
+  const lng = urlNumber('lng')
+  const lat = urlNumber('lat')
+  const zoom = urlNumber('zoom')
+  if (lng === null || lat === null || zoom === null) return null
+  return { center: [lng, lat], zoom }
+})()
+
+function persistView () {
+  if (!map) return
+  reactiveSearchParams.lng = map.getCenter().lng.toFixed(6)
+  reactiveSearchParams.lat = map.getCenter().lat.toFixed(6)
+  reactiveSearchParams.zoom = map.getZoom().toFixed(2)
+}
+
 // expressions maplibre : tableaux typés « large » pour contourner les unions d'expressions
 const lineColor = ['get', 'color'] as any
 const lineWidthExpr = () => ([
@@ -61,10 +87,15 @@ const stopRadiusExpr = () => ([
   11, Math.max(1.5, props.stopRadius * 0.45),
   15, props.stopRadius
 ]) as any
+const vehicleRadiusExpr = () => ([
+  'interpolate', ['linear'], ['zoom'],
+  10, Math.max(2, props.vehicleSize * 0.45),
+  16, props.vehicleSize * 1.25
+]) as any
 
 function beforeLayerId (): string | undefined {
-  // insère les données sous les labels du fond de carte pour rester lisibles
-  return map?.getStyle()?.layers?.find(l => l.type === 'symbol')?.id
+  // insère les données au-dessus des routes du fond de carte, sous les labels pour rester lisibles
+  return gtfsInsertBeforeId(map?.getStyle()?.layers ?? [])
 }
 
 function addSourcesAndLayers () {
@@ -152,34 +183,29 @@ function addSourcesAndLayers () {
     source: VEHICLES_SOURCE,
     paint: {
       'circle-color': lineColor,
-      'circle-radius': (['interpolate', ['linear'], ['zoom'], 10, 3.5, 16, 10]) as any,
+      'circle-radius': vehicleRadiusExpr(),
       'circle-stroke-color': '#ffffff',
       'circle-stroke-width': 1.5
     }
   }, STOPS_LAYER)
 
-  applyVisibility()
   applyHighlight()
   if (!loaded) {
     loaded = true
-    fitNetwork()
+    if (initialLoad) {
+      initialLoad = false
+      // vue de l'URL si présente (lien partagé / rafraîchissement), sinon cadrage
+      // réseau — ou sur la ligne restaurée d'un lien qui ne porte pas de position
+      if (!urlView) {
+        if (props.highlightRouteId) applyHighlight(true)
+        else fitNetwork()
+      }
+    }
     emit('ready')
   }
 }
 
-function applyVisibility () {
-  if (!map) return
-  const set = (layer: string, visible: boolean) => {
-    if (map?.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', visible ? 'visible' : 'none')
-  }
-  set(LINES_LAYER, props.showLines)
-  set(LINES_HIT_LAYER, props.showLines)
-  set(STOPS_LAYER, props.showStops)
-  set(STOPS_LABELS_LAYER, props.showStops && props.showStopLabels)
-  set(VEHICLES_LAYER, props.showVehicles)
-}
-
-function applyHighlight () {
+function applyHighlight (fit = false) {
   if (!map) return
   const filter: any = props.highlightRouteId
     ? ['==', ['get', 'route_id'], props.highlightRouteId]
@@ -187,12 +213,11 @@ function applyHighlight () {
   for (const layer of [LINES_LAYER, LINES_HIT_LAYER]) {
     if (map.getLayer(layer)) map.setFilter(layer, filter)
   }
-  if (props.highlightRouteId) {
-    const route = props.routeIndex.get(props.highlightRouteId)
-    if (route) {
-      const bounds = routeBounds(props.highlightRouteId)
-      if (bounds) map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 })
-    }
+  // cadrage sur la ligne : à la sélection utilisateur, ou à la restauration d'un
+  // lien qui porte la ligne sans position. Une vue URL complète prime toujours.
+  if (fit && props.highlightRouteId) {
+    const bounds = routeBounds(props.highlightRouteId)
+    if (bounds) map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 })
   }
 }
 
@@ -299,10 +324,14 @@ onMounted(() => {
   map = new maplibregl.Map({
     container: container.value,
     style: props.styleUrl,
+    ...(urlView ?? {}),
     attributionControl: false
   })
+  if (import.meta.env.DEV) window.__MAP__ = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
+  // toute fin de déplacement (pan, zoom, fitBounds) est reportée dans l'URL
+  map.on('moveend', persistView)
   // style.load se déclenche au chargement initial et après chaque setStyle (changement de fond)
   map.on('style.load', () => {
     loaded = false
@@ -323,7 +352,14 @@ watch(() => props.styleUrl, () => {
 watch(() => props.shapes, () => {
   const source = map?.getSource(LINES_SOURCE) as GeoJSONSource | undefined
   if (source) source.setData(props.shapes ?? emptyFc())
-  if (props.shapes?.features.length && loaded) fitNetwork()
+  if (props.shapes?.features.length && loaded) {
+    // ligne restaurée depuis l'URL ou sélectionnée : cadrer sur elle une fois
+    // les tracés (et donc l'index des lignes) disponibles — sauf si la vue URL
+    // complète doit primer
+    if (props.highlightRouteId) applyHighlight(!urlView)
+    // sinon cadrage réseau, sauf si une vue de l'URL est déjà appliquée
+    else if (!urlView) fitNetwork()
+  }
 })
 watch(() => props.stops, () => {
   const source = map?.getSource(STOPS_SOURCE) as GeoJSONSource | undefined
@@ -333,10 +369,10 @@ watch(() => props.vehicles, () => {
   const source = map?.getSource(VEHICLES_SOURCE) as GeoJSONSource | undefined
   if (source) source.setData(props.vehicles ?? emptyFc())
 })
-watch(() => [props.showLines, props.showStops, props.showStopLabels, props.showVehicles], applyVisibility)
 watch(() => props.lineWidth, () => map?.setPaintProperty(LINES_LAYER, 'line-width', lineWidthExpr() as any))
 watch(() => props.stopRadius, () => map?.setPaintProperty(STOPS_LAYER, 'circle-radius', stopRadiusExpr() as any))
-watch(() => props.highlightRouteId, applyHighlight)
+watch(() => props.vehicleSize, () => map?.setPaintProperty(VEHICLES_LAYER, 'circle-radius', vehicleRadiusExpr() as any))
+watch(() => props.highlightRouteId, () => applyHighlight(true))
 
 // recentrage sur le réseau quand la famille de jeux change
 watch(() => props.fitKey, () => {

@@ -4,9 +4,9 @@ import { fetchJson } from './http.js'
 import {
   classifyDataset,
   datasetDocUrl,
+  familyFromConfig,
   findRealtimeUrl,
   hasRealtimeAttachment,
-  kindToConfigField,
   linksBackTo,
   type LinkedRef,
   type MetadataDoc,
@@ -19,21 +19,25 @@ import {
  * via relatedDatasets et l'URL du flux GTFS-RT est découverte dans les pièces jointes
  * distantes du jeu porteur (le jeu de métadonnées, sans données).
  *
- * Le résultat est utilisé localement (dev, app publiée avant configuration) et, en mode
- * draft, poussé vers l'UI DataFair par messages set-config pour remplir les champs cachés
- * de la configuration.
+ * La famille complète (jeu de métadonnées + jeux liés) est poussée dans le tableau racine
+ * configuration.datasets par messages set-config, en mode draft : data-fair n'accorde le
+ * contournement de permissions de la clé d'application qu'aux jeux listés dans datasets
+ * (application-key.ts). Les jeux liés sont ensuite relus de ce tableau, classifiés par
+ * schéma (familyFromConfig). Le résultat est aussi utilisé localement (dev, app publiée
+ * avant configuration).
  */
 export function useFamily () {
   const { config, notifyConfigChange, application } = useConfig()
 
   const metadataDataset = computed(() => (config.value as any)?.datasets?.[0])
 
-  // valeur effective = champ de configuration s'il existe, sinon détection locale
+  // valeur effective = entrées du tableau datasets classifiées, sinon détection locale
+  // (immédiate après détection, avant l'écho set-config du mode draft)
   const localLinked = ref<Partial<Record<ResourceKind, LinkedRef>>>({})
   const localRealtimeUrl = ref<string | null>(null)
 
   const linkedDataset = (kind: ResourceKind) => computed(() =>
-    (config.value as any)?.gtfsMap?.[kindToConfigField(kind)] ?? localLinked.value[kind] ?? null)
+    familyFromConfig((config.value as any)?.datasets)[kind] ?? localLinked.value[kind] ?? null)
   const shapesDataset = linkedDataset('shapes')
   const stopsDataset = linkedDataset('stops')
   const stopTimesDataset = linkedDataset('stop-times')
@@ -42,6 +46,11 @@ export function useFamily () {
   // état de la détection, pour l'erreur affichée quand la famille est introuvable
   const resolved = ref(false)
   const error = ref<string | null>(null)
+
+  // dernière URL de flux pré-remplie par l'application : permet de distinguer une URL
+  // pré-remplie (remplaçable lors d'un changement de jeu) d'une URL saisie manuellement
+  // (intouchable)
+  let lastAutoUrl: string | null = null
 
   let resolving = false
 
@@ -75,7 +84,8 @@ export function useFamily () {
           const linkedRef: LinkedRef = {
             id: doc.id ?? rel.id,
             href: doc.href ?? datasetDocUrl(application.apiUrl, rel.id),
-            title: doc.title ?? rel.id
+            title: doc.title ?? rel.id,
+            schema: doc.schema
           }
           if (kind) {
             const target = linksBackTo(doc, selectedId) ? found : fallback
@@ -98,20 +108,12 @@ export function useFamily () {
       if (!carrierDoc) carrierDoc = carrierFallback
 
       localLinked.value = Object.fromEntries(found) as Partial<Record<ResourceKind, LinkedRef>>
-      for (const [kind, linkedRef] of found) {
-        const field = `gtfsMap.${kindToConfigField(kind)}`
-        const current = (config.value as any)?.gtfsMap?.[kindToConfigField(kind)]
-        if (current?.id !== linkedRef.id || current?.href !== linkedRef.href) {
-          notifyConfigChange(field, linkedRef)
-        }
-      }
 
-      // La famille complète est aussi référencée dans configuration.datasets : data-fair
-      // n'accorde le contournement de permissions de la clé d'application qu'aux jeux
-      // listés dans datasets (application-key.ts), pas aux champs cachés gtfsMap.*.
-      // L'entrée de métadonnées est réduite aux propriétés déclarées par le schéma :
-      // les propriétés injectées au runtime (slug, userPermissions, ...) déclencheraient
-      // la validation additionalProperties:false du formulaire de configuration.
+      // La famille complète est référencée dans configuration.datasets : le jeu de
+      // métadonnées (entrées réduites aux propriétés déclarées par le schéma, les
+      // propriétés injectées au runtime déclencheraient la validation
+      // additionalProperties:false du formulaire) puis les jeux liés, qui portent
+      // leur schéma pour rester classifiables par familyFromConfig.
       const linkedEntries = LINKED_ORDER
         .map(kind => found.get(kind))
         .filter((entry): entry is LinkedRef => !!entry)
@@ -127,16 +129,18 @@ export function useFamily () {
         }
       }
 
-      // flux temps réel : pièce jointe distante du jeu porteur
+      // flux temps réel : pièce jointe distante du jeu porteur, pré-remplie dans la
+      // configuration sauf si l'utilisateur a saisi manuellement une autre URL
       const detected = carrierDoc ? findRealtimeUrl(carrierDoc) : null
       localRealtimeUrl.value = detected
-      if (detected && detected !== (config.value as any)?.realtime?.autoDetectedUrl) {
-        notifyConfigChange('realtime.autoDetectedUrl', detected)
-        // n'écrase pas une URL saisie manuellement (différente de la dernière auto-détection)
+      if (detected) {
         const currentUrl = (config.value as any)?.realtime?.url
-        if (!currentUrl || currentUrl === (config.value as any)?.realtime?.autoDetectedUrl) {
+        if ((!currentUrl || currentUrl === lastAutoUrl) && currentUrl !== detected) {
           notifyConfigChange('realtime.url', detected)
         }
+        lastAutoUrl = detected
+      } else {
+        lastAutoUrl = null
       }
 
       resolved.value = true

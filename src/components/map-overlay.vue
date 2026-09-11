@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import RouteBadge from './route-badge.vue'
 import type { RouteInfo } from '@/composables/gtfs.js'
@@ -7,23 +7,24 @@ import type { RouteInfo } from '@/composables/gtfs.js'
 const props = defineProps<{
   title: string
   routes: RouteInfo[]
-  showLines: boolean
-  showStops: boolean
-  showVehicles: boolean
   hasVehicles: boolean
   lastUpdated: number | null
   vehicleCount: number
+  /** ligne sélectionnée à l'extérieur de l'overlay (restauration depuis l'URL) */
+  selectedRouteId?: string | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:showLines', value: boolean): void
-  (e: 'update:showStops', value: boolean): void
-  (e: 'update:showVehicles', value: boolean): void
   (e: 'select-route', routeId: string | null): void
 }>()
 
 const expanded = ref(true)
-const selectedRouteId = ref<string | null>(null)
+const selectedRouteId = ref<string | null>(props.selectedRouteId ?? null)
+
+// la sélection peut changer à l'extérieur (URL, changement de réseau) : refléter l'état
+watch(() => props.selectedRouteId, (value) => {
+  selectedRouteId.value = value ?? null
+})
 
 const sortedRoutes = computed(() => [...props.routes].sort((a, b) => a.shortName.localeCompare(b.shortName, 'fr', { numeric: true })))
 
@@ -54,31 +55,6 @@ function selectRoute (routeId: string) {
         v-if="expanded"
         class="overlay-body"
       >
-        <v-switch
-          :model-value="showLines"
-          label="Lignes"
-          density="compact"
-          hide-details
-          color="primary"
-          @update:model-value="emit('update:showLines', !!$event)"
-        />
-        <v-switch
-          :model-value="showStops"
-          label="Arrêts"
-          density="compact"
-          hide-details
-          color="primary"
-          @update:model-value="emit('update:showStops', !!$event)"
-        />
-        <v-switch
-          v-if="hasVehicles"
-          :model-value="showVehicles"
-          label="Véhicules en temps réel"
-          density="compact"
-          hide-details
-          color="primary"
-          @update:model-value="emit('update:showVehicles', !!$event)"
-        />
         <div
           v-if="hasVehicles"
           class="rt-status"

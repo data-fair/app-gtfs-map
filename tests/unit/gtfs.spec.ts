@@ -7,10 +7,12 @@ import {
   classifyDataset,
   contrastTextColor,
   datasetDocUrl,
+  familyFromConfig,
+  filterPlatformStops,
   findRealtimeUrl,
+  gtfsInsertBeforeId,
   hasRealtimeAttachment,
   isTruncated,
-  kindToConfigField,
   linksBackTo,
   normalizeColor,
   parseGtfsTime,
@@ -51,12 +53,6 @@ test.describe('classifyDataset', () => {
 
   test('un jeu de métadonnées (sans schéma) n\'est classé dans aucun rôle', () => {
     expect(classifyDataset({ schema: [], title: 'Réseau Kicéo - métadonnées' })).toBeNull()
-  })
-
-  test('nom du champ de configuration pour chaque rôle', () => {
-    expect(kindToConfigField('shapes')).toBe('shapesDataset')
-    expect(kindToConfigField('stops')).toBe('stopsDataset')
-    expect(kindToConfigField('stop-times')).toBe('stopTimesDataset')
   })
 })
 
@@ -108,6 +104,26 @@ test.describe('famille de jeux', () => {
     expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, undefined)).toBe(false)
   })
 
+  test('familyFromConfig classifie les entrées liées du tableau datasets, sans l\'entrée 0', () => {
+    const datasets = [
+      { id: 'meta', href: 'api/v1/datasets/meta', title: 'Réseau - métadonnées', schema: [] },
+      { id: 'shapes', href: 'api/v1/datasets/shapes', title: 'Réseau - tracés', schema: [{ key: 'route_short_name' }] },
+      { id: 'stops', href: 'api/v1/datasets/stops', title: 'Réseau - arrêts', schema: [{ key: 'stop_name' }] },
+      { id: 'stoptimes', href: 'api/v1/datasets/stoptimes', title: 'Réseau - horaires', schema: [{ key: 'arrival_time' }] }
+    ]
+    const family = familyFromConfig(datasets)
+    expect(Object.keys(family).sort()).toEqual(['shapes', 'stop-times', 'stops'])
+    expect(family.shapes?.id).toBe('shapes')
+    expect(family.stops?.id).toBe('stops')
+    expect(family['stop-times']?.id).toBe('stoptimes')
+  })
+
+  test('familyFromConfig ignore les entrées non reconnues et tolère un tableau absent', () => {
+    expect(familyFromConfig([{ id: 'meta' }, { id: 'autre', href: 'x', title: 'Autre jeu', schema: [] }] as any)).toEqual({})
+    expect(familyFromConfig(undefined)).toEqual({})
+    expect(familyFromConfig([undefined, { id: 's', href: 'x', title: 'S - tracés', schema: [] }] as any).shapes?.id).toBe('s')
+  })
+
   test('isTruncated compare le total au nombre d\'objets renvoyés', () => {
     expect(isTruncated(10001, 10000)).toBe(true)
     expect(isTruncated(10000, 10000)).toBe(false)
@@ -153,6 +169,26 @@ test.describe('couleurs GTFS', () => {
     expect(index.size).toBe(2)
     expect(index.get('A')).toMatchObject({ shortName: '1', longName: 'Gare - Plage', color: '#FF8800' })
     expect(index.get('B')?.color).toBe('#1976D2')
+  })
+
+  test('filterPlatformStops retire les stations parentes, garde plateformes et flux sans location_type', () => {
+    const fc: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: { stop_id: 'S1', location_type: '0' } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0.0001] }, properties: { stop_id: 'SP', location_type: '1' } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0.0002] }, properties: { stop_id: 'S2', location_type: '0' } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0.0003] }, properties: { stop_id: 'S3' } }
+      ] as FeatureCollection['features']
+    }
+    const filtered = filterPlatformStops(fc)
+    expect(filtered?.features.map(f => f.properties!.stop_id)).toEqual(['S1', 'S2', 'S3'])
+    // la collection d'origine n'est pas modifiée
+    expect(fc.features).toHaveLength(4)
+  })
+
+  test('filterPlatformStops tolère une collection absente', () => {
+    expect(filterPlatformStops(null)).toBeNull()
   })
 
   test('contrastTextColor choisit un texte lisible selon la luminance', () => {
@@ -213,5 +249,42 @@ test.describe('prochains passages', () => {
   test('borne le nombre de passages affichés à 6', () => {
     const rows = Array.from({ length: 10 }, (_, i) => ({ route_name: '1', arrival_time: `11:${String(i).padStart(2, '0')}:00`, week: 'Mercredi' }))
     expect(selectDepartures(rows, now)).toHaveLength(6)
+  })
+})
+
+test.describe('gtfsInsertBeforeId', () => {
+  // ordre condensé du style klokantech-basic : les routes viennent après un premier label (housenumber)
+  const klokantech = [
+    { id: 'background', type: 'background' },
+    { id: 'water', type: 'fill' },
+    { id: 'waterway', type: 'line' },
+    { id: 'building', type: 'fill' },
+    { id: 'housenumber', type: 'symbol' },
+    { id: 'road_path', type: 'line' },
+    { id: 'road_minor', type: 'line' },
+    { id: 'road_major_motorway', type: 'line' },
+    { id: 'railway', type: 'line' },
+    { id: 'bridge_major', type: 'line' },
+    { id: 'admin_country', type: 'line' },
+    { id: 'poi_label', type: 'symbol' },
+    { id: 'road_major_label', type: 'symbol' },
+    { id: 'place_label_city', type: 'symbol' }
+  ]
+
+  test('insère au-dessus des routes et ponts, sous les labels du fond de carte', () => {
+    expect(gtfsInsertBeforeId(klokantech)).toBe('poi_label')
+  })
+
+  test('ignore un label qui précède les routes (bug historique : couches sous les routes)', () => {
+    // housenumber précède road_* : l'ancien code le choisissait et plaçait les données sous les routes
+    expect(gtfsInsertBeforeId(klokantech)).not.toBe('housenumber')
+  })
+
+  test('style sans route ni label : pas de point d\'insertion (couches au sommet)', () => {
+    expect(gtfsInsertBeforeId([{ id: 'background', type: 'background' }])).toBeUndefined()
+  })
+
+  test('style sans label : pas de point d\'insertion', () => {
+    expect(gtfsInsertBeforeId([{ id: 'background', type: 'background' }, { id: 'road', type: 'line' }])).toBeUndefined()
   })
 })

@@ -8,10 +8,11 @@
       "properties": {
         "datasets": {
           "type": "array",
+          "minItems": 1,
           "items": [
             {
               "title": "Jeu de données GTFS",
-              "description": "Le jeu de métadonnées produit par le traitement GTFS (sans données). Les jeux liés « tracés », « arrêts » et « horaires » sont détectés automatiquement.",
+              "description": "Le jeu de métadonnées produit par le traitement GTFS (sans données). Seuls ces jeux sont proposés ; les jeux liés « tracés », « arrêts » et « horaires » sont détectés automatiquement et ajoutés à la configuration.",
               "type": "object",
               "additionalProperties": false,
               "properties": {
@@ -19,56 +20,19 @@
                 "title": { "type": "string" },
                 "id": { "type": "string" },
                 "schema": { "type": "array" },
-                "finalizedAt": { "type": "string" }
+                "finalizedAt": { "type": "string" },
+                "relatedDatasets": { "type": "array" }
               },
               "layout": {
                 "getItems": {
-                  "url": "api/v1/datasets?status=finalized&q={q}&select=id,title,schema&size=100",
+                  "url": "api/v1/datasets?status=finalized&type=metaOnly&q={q}&select=id,title,schema,relatedDatasets&${context.datasetFilter}&size=50",
                   "itemKey": "data[\"href\"]",
                   "itemTitle": "data[\"title\"]",
-                  "itemsResults": "data[\"results\"]"
+                  "itemsResults": "data.results.filter(d => (d.relatedDatasets ?? []).length >= 3)"
                 }
               }
             }
           ]
-        },
-        "gtfsMap": {
-          "type": "object",
-          "title": "Jeux de données liés",
-          "description": "Détectés automatiquement à partir du jeu de métadonnées sélectionné.",
-          "layout": "none",
-          "properties": {
-            "shapesDataset": {
-              "type": "object",
-              "additionalProperties": false,
-              "layout": "none",
-              "properties": {
-                "id": { "type": "string" },
-                "href": { "type": "string" },
-                "title": { "type": "string" }
-              }
-            },
-            "stopsDataset": {
-              "type": "object",
-              "additionalProperties": false,
-              "layout": "none",
-              "properties": {
-                "id": { "type": "string" },
-                "href": { "type": "string" },
-                "title": { "type": "string" }
-              }
-            },
-            "stopTimesDataset": {
-              "type": "object",
-              "additionalProperties": false,
-              "layout": "none",
-              "properties": {
-                "id": { "type": "string" },
-                "href": { "type": "string" },
-                "title": { "type": "string" }
-              }
-            }
-          }
         }
       }
     },
@@ -97,14 +61,10 @@
             "url": {
               "type": "string",
               "title": "URL du flux GTFS-RT",
-              "description": "Détectée automatiquement dans les pièces jointes du jeu de métadonnées ; la saisir ici seulement pour forcer un autre flux.",
+              "description": "Pré-renseignée automatiquement à partir de la pièce jointe GTFS-RT du jeu de données sélectionné ; à modifier seulement pour forcer un autre flux.",
               "layout": {
                 "if": "rootData.realtime && rootData.realtime.enabled"
               }
-            },
-            "autoDetectedUrl": {
-              "type": "string",
-              "layout": "none"
             }
           }
         }
@@ -116,43 +76,64 @@
         "map": {
           "type": "object",
           "properties": {
-            "styleUrl": {
+            "style": {
               "type": "string",
-              "title": "Style du fond de carte",
-              "description": "URL d'un style MapLibre. Par défaut le tileserver de l'instance data-fair.",
-              "default": "/tileserver/styles/klokantech-basic/style.json"
-            },
-            "showLines": {
-              "type": "boolean",
-              "title": "Afficher les tracés de lignes",
-              "default": true
-            },
-            "showStops": {
-              "type": "boolean",
-              "title": "Afficher les arrêts",
-              "default": true
-            },
-            "showStopLabels": {
-              "type": "boolean",
-              "title": "Afficher les noms des arrêts aux zooms élevés",
-              "default": true,
-              "layout": {
-                "if": "rootData.map && rootData.map.showStops"
-              }
+              "title": "Fond de carte",
+              "default": "klokantech-basic",
+              "oneOf": [
+                { "const": "klokantech-basic", "title": "Klokantech Basic" },
+                { "const": "minimal", "title": "Minimal" },
+                { "const": "void", "title": "Vide" },
+                { "const": "admindiv", "title": "Divisions administratives" },
+                { "const": "dark-matter", "title": "Dark Matter" },
+                { "const": "fiord-color", "title": "Fiord Color" },
+                { "const": "osm-bright", "title": "OSM Bright" },
+                { "const": "positron", "title": "Positron" },
+                { "const": "osm-liberty", "title": "OSM Liberty" },
+                { "const": "cassini", "title": "Cassini" },
+                { "const": "cadastre", "title": "Cadastre" },
+                { "const": "satellite", "title": "Vue satellite" },
+                { "const": "plan-ign-standard", "title": "Plan IGN" }
+              ]
             },
             "lineWidth": {
-              "type": "number",
-              "title": "Épaisseur des tracés",
+              "type": "integer",
               "default": 4,
               "minimum": 1,
-              "maximum": 15
+              "maximum": 15,
+              "layout": {
+                "comp": "slider",
+                "step": 1,
+                "label": "",
+                "slots": { "before": "Épaisseur des tracés" },
+                "props": { "showTicks": "always", "thumbLabel": true }
+              }
             },
             "stopRadius": {
-              "type": "number",
-              "title": "Taille des arrêts",
+              "type": "integer",
               "default": 5,
               "minimum": 2,
-              "maximum": 12
+              "maximum": 12,
+              "layout": {
+                "comp": "slider",
+                "step": 1,
+                "label": "",
+                "slots": { "before": "Taille des arrêts" },
+                "props": { "showTicks": "always", "thumbLabel": true }
+              }
+            },
+            "vehicleSize": {
+              "type": "integer",
+              "default": 8,
+              "minimum": 4,
+              "maximum": 16,
+              "layout": {
+                "comp": "slider",
+                "step": 1,
+                "label": "",
+                "slots": { "before": "Taille des véhicules" },
+                "props": { "showTicks": "always", "thumbLabel": true }
+              }
             },
             "fallbackColor": {
               "type": "string",

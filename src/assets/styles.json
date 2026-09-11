@@ -1,0 +1,4 @@
+{
+  "void": { "version": 8, "sources": {}, "layers": [] },
+  "plan-ign-standard": "https://data.geopf.fr/annexes/ressources/vectorTiles/styles/PLAN.IGN/standard.json"
+}

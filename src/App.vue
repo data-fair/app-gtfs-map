@@ -4,15 +4,28 @@ import type { FeatureCollection } from 'geojson'
 import DfUiNotif from '@data-fair/lib-vuetify/ui-notif.vue'
 import { useUiNotif } from '@data-fair/lib-vue/ui-notif.js'
 import { isDraftMode, useConfig } from './composables/config'
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import { useFamily } from './composables/use-family'
-import { applyFallbackColor, buildRouteIndex, loadGeoJson, type LinkedRef } from './composables/gtfs'
+import { applyFallbackColor, buildRouteIndex, filterPlatformStops, loadGeoJson, type LinkedRef } from './composables/gtfs'
 import { useVehicles } from './composables/use-vehicles'
 import GtfsMap from './components/gtfs-map.vue'
 import MapOverlay from './components/map-overlay.vue'
+import styleOverrides from './assets/styles.json'
 
 const { config, error } = useConfig()
 const { sendUiNotif } = useUiNotif()
 const family = useFamily()
+
+/* ------------------------------------------------------------------ */
+/* Fond de carte                                                       */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_STYLE = 'klokantech-basic'
+
+const styleUrl = computed(() => {
+  const style = (config.value as any)?.map?.style ?? DEFAULT_STYLE
+  return (styleOverrides as any)[style] ?? `${window.location.origin}/tileserver/styles/${style}/style.json`
+})
 
 /* ------------------------------------------------------------------ */
 /* Chargement des couches statiques                                    */
@@ -27,6 +40,7 @@ const stopsStatus = ref<LayerStatus>('idle')
 
 const fallbackColor = computed(() => (config.value as any)?.map?.fallbackColor ?? '#1976D2')
 const shapes = computed(() => rawShapes.value ? applyFallbackColor(rawShapes.value, fallbackColor.value) : null)
+const stops = computed(() => filterPlatformStops(rawStops.value))
 const routeIndex = computed(() => buildRouteIndex(shapes.value, fallbackColor.value))
 
 /** Les deux chargements de couches sont terminés (succès ou échec). */
@@ -37,7 +51,7 @@ const layersSettled = computed(() =>
   (family.resolved.value || !!family.error.value ||
     !!family.shapesDataset.value?.href || !!family.stopsDataset.value?.href))
 
-async function loadLayer (dataset: LinkedRef | undefined, target: typeof rawShapes, status: Ref<LayerStatus>) {
+async function loadLayer (dataset: LinkedRef | null | undefined, target: typeof rawShapes, status: Ref<LayerStatus>) {
   if (!dataset?.href) {
     target.value = null
     status.value = 'done'
@@ -90,19 +104,21 @@ watch(vehiclesError, (message) => {
 })
 
 /* ------------------------------------------------------------------ */
-/* Commandes de vue                                                    */
+/* Sélection d'une ligne                                               */
 /* ------------------------------------------------------------------ */
 
-const showLines = ref(true)
-const showStops = ref(true)
-const showVehicles = ref(true)
-const highlightRouteId = ref<string | null>(null)
+const highlightRouteId = ref<string | null>(reactiveSearchParams.route || null)
 
-watch(() => (config.value as any)?.map, (mapConfig) => {
-  if (!mapConfig) return
-  showLines.value = mapConfig.showLines !== false
-  showStops.value = mapConfig.showStops !== false
-}, { immediate: true, deep: true })
+// ligne sélectionnée persistée dans l'URL : partage de lien et restauration au rafraîchissement
+watch(highlightRouteId, (value) => {
+  if (value) reactiveSearchParams.route = value
+  else delete reactiveSearchParams.route
+})
+
+// lien périmé (la route n'existe plus dans le réseau) : ne pas filtrer la carte sur du vide
+watch([routeIndex, highlightRouteId], ([index, id]) => {
+  if (id && index.size && !index.has(id)) highlightRouteId.value = null
+})
 
 watch(() => family.metadataDataset.value?.id, () => {
   highlightRouteId.value = null
@@ -175,30 +191,25 @@ watch(error, (message) => {
   <template v-else>
     <GtfsMap
       :shapes="shapes"
-      :stops="rawStops"
+      :stops="stops"
       :vehicles="vehicles"
       :route-index="routeIndex"
-      :style-url="(config as any)?.map?.styleUrl ?? '/tileserver/styles/klokantech-basic/style.json'"
-      :show-lines="showLines"
-      :show-stops="showStops"
-      :show-stop-labels="(config as any)?.map?.showStopLabels !== false"
-      :show-vehicles="showVehicles && !!vehicles.features.length"
+      :style-url="styleUrl"
       :line-width="(config as any)?.map?.lineWidth ?? 4"
       :stop-radius="(config as any)?.map?.stopRadius ?? 5"
+      :vehicle-size="(config as any)?.map?.vehicleSize ?? 8"
       :stop-times-href="family.stopTimesDataset.value?.href ?? null"
       :fit-key="family.metadataDataset.value?.id ?? null"
       :highlight-route-id="highlightRouteId"
       @ready="mapReady = true"
     />
     <MapOverlay
-      v-model:show-lines="showLines"
-      v-model:show-stops="showStops"
-      v-model:show-vehicles="showVehicles"
       :title="title"
       :routes="[...routeIndex.values()]"
       :has-vehicles="!!realtimeUrl && realtimeEnabled"
       :last-updated="lastUpdated"
       :vehicle-count="vehicles.features.length"
+      :selected-route-id="highlightRouteId"
       @select-route="highlightRouteId = $event"
     />
   </template>

@@ -52,12 +52,18 @@ export const STOPS_GEOJSON = {
     {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [-1.54, 47.205] },
-      properties: { stop_id: 'S1', stop_name: 'Gare Centrale', routes: '1;2' }
+      properties: { stop_id: 'S1', stop_name: 'Gare Centrale', routes: '1;2', location_type: '0' }
     },
     {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [-1.52, 47.215] },
-      properties: { stop_id: 'S2', stop_name: 'Mairie', routes: '1' }
+      properties: { stop_id: 'S2', stop_name: 'Mairie', routes: '1', location_type: '0' }
+    },
+    {
+      // station parente de S1/S2 : doit être filtrée, jamais rendue sur la carte
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [-1.53, 47.21] },
+      properties: { stop_id: 'SP', stop_name: 'Pôle Central', location_type: '1' }
     }
   ]
 }

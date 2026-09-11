@@ -12,6 +12,8 @@ export interface LinkedRef {
   id: string
   href: string
   title: string
+  /** schéma du jeu lié, porté par les entrées poussées dans configuration.datasets pour rester classifiables en mode draft */
+  schema?: Array<{ key?: string }>
 }
 
 export type ResourceKind = 'shapes' | 'stops' | 'stop-times'
@@ -47,9 +49,22 @@ export function classifyDataset (doc: { schema?: Array<{ key?: string }>, title?
   return null
 }
 
-/** Nom du champ de configuration portant la référence d'un jeu lié. */
-export const kindToConfigField = (kind: ResourceKind) =>
-  ({ shapes: 'shapesDataset', stops: 'stopsDataset', 'stop-times': 'stopTimesDataset' })[kind]
+/**
+ * Classifie les jeux liés référencés dans configuration.datasets (entrées d'index ≥ 1 ;
+ * l'entrée 0 est le jeu de métadonnées sélectionné). Ces entrées sont écrites uniquement
+ * par postMessage (use-family), jamais éditées dans le formulaire.
+ */
+export function familyFromConfig (
+  datasets: Array<LinkedRef | undefined> | undefined
+): Partial<Record<ResourceKind, LinkedRef>> {
+  const family: Partial<Record<ResourceKind, LinkedRef>> = {}
+  for (const entry of (datasets ?? []).slice(1)) {
+    if (!entry?.id && !entry?.href) continue
+    const kind = classifyDataset(entry)
+    if (kind && !family[kind]) family[kind] = entry
+  }
+  return family
+}
 
 /**
  * URL d'un document de jeu de données.
@@ -128,6 +143,14 @@ export interface GeoJsonLayer {
 export const isTruncated = (total: number | null | undefined, count: number): boolean =>
   typeof total === 'number' && total > count
 
+/** Point d'insertion des couches GTFS dans le style du fond de carte :
+ * au-dessus de la dernière couche « line » (routes, ponts...), sous les labels (« symbol ») suivants. */
+export function gtfsInsertBeforeId (layers: ReadonlyArray<{ id: string, type: string }>): string | undefined {
+  let lastLine = -1
+  layers.forEach((l, i) => { if (l.type === 'line') lastLine = i })
+  return layers.slice(lastLine + 1).find(l => l.type === 'symbol')?.id
+}
+
 export async function loadGeoJson (href: string): Promise<GeoJsonLayer> {
   const result = await fetchJson<FeatureCollection & { total?: number }>(`${href}/lines?format=geojson&size=${API_SIZE}`)
   result.features = (result.features ?? []).filter(f => f.geometry)
@@ -142,6 +165,21 @@ export function applyFallbackColor (fc: FeatureCollection, fallback: string): Fe
     props.color = normalizeColor(props.route_color as string) ?? fallback
   }
   return fc
+}
+
+/**
+ * Retire les stations parentes (`location_type = 1`) du jeu « arrêts » : chaque pôle
+ * porte alors une seule paire de plateformes (une par sens) au lieu de trois points.
+ * Les features sans `location_type` sont conservées (les flux sans hiérarchie n'en ont pas).
+ */
+export function filterPlatformStops (fc: FeatureCollection | null): FeatureCollection | null {
+  if (!fc) return fc
+  return {
+    ...fc,
+    features: fc.features.filter(f =>
+      (f.properties as Record<string, unknown> | null)?.location_type !== '1' &&
+      (f.properties as Record<string, unknown> | null)?.location_type !== 1)
+  }
 }
 
 export interface RouteInfo {
