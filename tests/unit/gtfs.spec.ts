@@ -15,6 +15,7 @@ import {
   isTruncated,
   linksBackTo,
   normalizeColor,
+  normalizeStopRoutes,
   parseGtfsTime,
   selectDepartures
 } from '../../src/composables/gtfs'
@@ -30,7 +31,9 @@ test.describe('URLs API', () => {
     expect(url).toContain('stop_id_eq=S1')
     expect(url).not.toMatch(/[?&]stop_id=/)
     expect(url).toContain('arrival_time_gte=10%3A30%3A00')
-    expect(url).toContain('sort=arrival_time:1')
+    expect(url).toContain('sort=arrival_time&')
+    // l'API data-fair ne comprend que « -champ » pour le tri descendant, pas la syntaxe ES « champ:1 »
+    expect(url).not.toContain('arrival_time:1')
   })
 })
 
@@ -265,6 +268,27 @@ test.describe('prochains passages', () => {
   test('borne le nombre de passages affichés à 6', () => {
     const rows = Array.from({ length: 10 }, (_, i) => ({ route_name: '1', arrival_time: `11:${String(i).padStart(2, '0')}:00`, week: 'Mercredi' }))
     expect(selectDepartures(rows, now)).toHaveLength(6)
+  })
+})
+
+test.describe('normalizeStopRoutes', () => {
+  test('accepte le tableau renvoyé par l\'API GeoJSON', () => {
+    expect(normalizeStopRoutes(['1', '2'])).toEqual(['1', '2'])
+  })
+
+  test('accepte la chaîne séparée par des points-virgules de l\'API JSON', () => {
+    expect(normalizeStopRoutes('1;2')).toEqual(['1', '2'])
+  })
+
+  test('nettoie les segments vides et les espaces', () => {
+    expect(normalizeStopRoutes('1;;2;')).toEqual(['1', '2'])
+    expect(normalizeStopRoutes(['1', '', ' 2 '])).toEqual(['1', '2'])
+  })
+
+  test('tolère une valeur absente ou d\'un autre type', () => {
+    expect(normalizeStopRoutes(undefined)).toEqual([])
+    expect(normalizeStopRoutes(null)).toEqual([])
+    expect(normalizeStopRoutes(42)).toEqual([])
   })
 })
 

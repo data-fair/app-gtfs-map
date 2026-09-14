@@ -6,7 +6,7 @@ import { loadDepartures, type Departure } from '@/composables/gtfs.js'
 const props = defineProps<{
   stopId: string
   stopName: string
-  routes: string
+  routes: string[]
   stopTimesHref: string | null
 }>()
 
@@ -29,11 +29,11 @@ onMounted(async () => {
       {{ stopName || 'Arrêt' }}
     </div>
     <div
-      v-if="routes"
+      v-if="routes.length"
       class="details-line"
     >
       <RouteBadge
-        v-for="route in routes.split(';').filter(Boolean).slice(0, 12)"
+        v-for="route in routes.slice(0, 12)"
         :key="route"
         :route-name="route"
         color="#607D8B"

@@ -7,7 +7,7 @@ import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
-import { gtfsInsertBeforeId, type RouteInfo } from '@/composables/gtfs.js'
+import { gtfsInsertBeforeId, normalizeStopRoutes, type RouteInfo } from '@/composables/gtfs.js'
 import type { Selection } from '@/composables/selection.js'
 import type { VehicleProperties } from '@/composables/use-vehicles.js'
 
@@ -279,7 +279,7 @@ function selectionFromFeature (feature: MapGeoJSONFeature): Selection | null {
     case VEHICLES_LAYER:
       return { kind: 'vehicle', vehicleId: p.id ?? '', vehicle: p as unknown as VehicleProperties }
     case STOPS_LAYER:
-      return { kind: 'stop', stopId: p.stop_id ?? '', stopName: p.stop_name ?? '', routes: p.routes ?? '' }
+      return { kind: 'stop', stopId: p.stop_id ?? '', stopName: p.stop_name ?? '', routes: normalizeStopRoutes(p.routes) }
     case LINES_HIT_LAYER:
       return p.route_id ? { kind: 'route', routeId: p.route_id } : null
     default:

@@ -218,6 +218,8 @@ test.describe('app-gtfs-map', () => {
 
     await clickMapAt(page, [-1.54, 47.205])
     await expect(panel.getByText('Gare Centrale')).toBeVisible()
+    // routes reçues en tableau par l'API GeoJSON : les deux badges de ligne sont rendus
+    await expect(panel.locator('.gtfs-details .route-badge')).toHaveCount(2)
   })
 
   test('mobile : bottom nav pour la légende et le détail', async ({ page }) => {

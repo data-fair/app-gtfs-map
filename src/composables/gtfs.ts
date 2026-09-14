@@ -172,6 +172,19 @@ export function applyFallbackColor (fc: FeatureCollection, fallback: string): Fe
 }
 
 /**
+ * Normalise les lignes desservies d'un arrêt. Le champ `routes` du schéma GTFS est
+ * multivalué (`separator: ';'`) : l'API GeoJSON renvoie donc un tableau (les tableaux
+ * sont préservés), tandis que l'API JSON joint les valeurs en une chaîne « 1;2 ».
+ */
+export function normalizeStopRoutes (raw: unknown): string[] {
+  const values = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(';') : []
+  return values
+    .filter((route): route is string => typeof route === 'string')
+    .map(route => route.trim())
+    .filter(Boolean)
+}
+
+/**
  * Retire les stations parentes (`location_type = 1`) du jeu « arrêts » : chaque pôle
  * porte alors une seule paire de plateformes (une par sens) au lieu de trois points.
  * Les features sans `location_type` sont conservées (les flux sans hiérarchie n'en ont pas).
@@ -278,7 +291,7 @@ export function selectDepartures (rows: any[], now: Date): Departure[] {
  */
 export function buildDeparturesUrl (stopTimesHref: string, stopId: string, now: Date = new Date()): string {
   const minTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
-  return `${stopTimesHref}/lines?stop_id_eq=${encodeURIComponent(stopId)}&arrival_time_gte=${encodeURIComponent(minTime)}&sort=arrival_time:1&size=200`
+  return `${stopTimesHref}/lines?stop_id_eq=${encodeURIComponent(stopId)}&arrival_time_gte=${encodeURIComponent(minTime)}&sort=arrival_time&size=200`
 }
 
 /**

@@ -9,5 +9,5 @@ import type { VehicleProperties } from './use-vehicles.js'
  */
 export type Selection =
   | { kind: 'route', routeId: string }
-  | { kind: 'stop', stopId: string, stopName: string, routes: string }
+  | { kind: 'stop', stopId: string, stopName: string, routes: string[] }
   | { kind: 'vehicle', vehicleId: string, vehicle: VehicleProperties }
