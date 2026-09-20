@@ -8,6 +8,7 @@ const props = defineProps<{
   stopName: string
   routes: string[]
   stopTimesHref: string | null
+  allowedRouteNames: Set<string> | null
 }>()
 
 const departures = ref<Departure[] | null>(null)
@@ -16,7 +17,7 @@ const loadError = ref(false)
 onMounted(async () => {
   if (!props.stopTimesHref || !props.stopId) return
   try {
-    departures.value = await loadDepartures(props.stopTimesHref, props.stopId)
+    departures.value = await loadDepartures(props.stopTimesHref, props.stopId, new Date(), props.allowedRouteNames)
   } catch {
     loadError.value = true
   }

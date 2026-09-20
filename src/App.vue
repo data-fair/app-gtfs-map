@@ -7,9 +7,18 @@ import { useUiNotif } from '@data-fair/lib-vue/ui-notif.js'
 import { isDraftMode, useConfig } from './composables/config'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import { useFamily } from './composables/use-family'
-import { applyFallbackColor, buildRouteIndex, filterPlatformStops, loadGeoJson, type LinkedRef } from './composables/gtfs'
+import {
+  applyFallbackColor,
+  buildRouteIndex,
+  filterFeaturesByRoutes,
+  filterPlatformStops,
+  filterStopsByRouteNames,
+  loadGeoJson,
+  resolveAllowedRouteIds,
+  type LinkedRef
+} from './composables/gtfs'
 import type { Selection } from './composables/selection'
-import { useVehicles } from './composables/use-vehicles'
+import { filterVehiclesByRoutes, useVehicles } from './composables/use-vehicles'
 import MapWrapper from './components/map-wrapper.vue'
 import styleOverrides from './assets/styles.json'
 
@@ -40,9 +49,32 @@ const shapesStatus = ref<LayerStatus>('idle')
 const stopsStatus = ref<LayerStatus>('idle')
 
 const fallbackColor = computed(() => (config.value as any)?.map?.fallbackColor ?? '#1976D2')
-const shapes = computed(() => rawShapes.value ? applyFallbackColor(rawShapes.value, fallbackColor.value) : null)
-const stops = computed(() => filterPlatformStops(rawStops.value))
+
+/* ------------------------------------------------------------------ */
+/* Filtre de lignes (configuration.routes)                             */
+/* ------------------------------------------------------------------ */
+
+// toutes les lignes présentes dans les tracés bruts, pour résoudre le mode exclusion
+const allRouteIds = computed(() => (rawShapes.value?.features ?? [])
+  .map(f => (f.properties as Record<string, unknown> | null)?.route_id)
+  .filter((id): id is string => typeof id === 'string' && !!id))
+
+const allowedRouteIds = computed(() => resolveAllowedRouteIds(
+  (config.value as any)?.routes?.mode,
+  (config.value as any)?.routes?.ids,
+  allRouteIds.value
+))
+
+const shapes = computed(() => rawShapes.value
+  ? filterFeaturesByRoutes(applyFallbackColor(rawShapes.value, fallbackColor.value), 'route_id', allowedRouteIds.value)
+  : null)
 const routeIndex = computed(() => buildRouteIndex(shapes.value, fallbackColor.value))
+
+// noms affichés des lignes autorisées (les arrêts et les passages portent ce nom, pas route_id)
+const allowedRouteNames = computed<Set<string> | null>(() =>
+  allowedRouteIds.value ? new Set([...routeIndex.value.values()].map(r => r.shortName)) : null)
+
+const stops = computed(() => filterStopsByRouteNames(filterPlatformStops(rawStops.value), allowedRouteNames.value))
 
 /** Les deux chargements de couches sont terminés (succès ou échec). */
 const layersSettled = computed(() =>
@@ -100,6 +132,9 @@ const {
   routeIndex,
   fallbackColor
 })
+
+// les véhicules des lignes masquées par la configuration ne sont ni affichés ni comptés
+const displayVehicles = computed(() => filterVehiclesByRoutes(vehicles.value, allowedRouteIds.value))
 
 // Un flux récupéré mais sans positions (vide ou TripUpdate) est un cas fréquent de
 // confusion : on l'explicite dans la légende au lieu d'afficher « 0 véhicule ».
@@ -171,8 +206,8 @@ function selectRoute (routeId: string | null) {
 
 // le compteur de la légende reflète le filtre de ligne actif
 const vehicleCount = computed(() => {
-  if (!highlightRouteId.value) return vehicles.value.features.length
-  return vehicles.value.features.filter(f => f.properties.routeId === highlightRouteId.value).length
+  if (!highlightRouteId.value) return displayVehicles.value.features.length
+  return displayVehicles.value.features.filter(f => f.properties.routeId === highlightRouteId.value).length
 })
 
 const mapReady = ref(false)
@@ -246,7 +281,7 @@ watch(error, (message) => {
         v-else
         :shapes="shapes"
         :stops="stops"
-        :vehicles="vehicles"
+        :vehicles="displayVehicles"
         :route-index="routeIndex"
         :style-url="styleUrl"
         :line-width="(config as any)?.map?.lineWidth ?? 4"
@@ -262,6 +297,7 @@ watch(error, (message) => {
         :vehicle-count="vehicleCount"
         :selection="selection"
         :stop-times-href="family.stopTimesDataset.value?.href ?? null"
+        :allowed-route-names="allowedRouteNames"
         :panel-position="(config as any)?.panelPosition === 'left' ? 'left' : 'right'"
         :large-panel="(config as any)?.largePanel === true"
         @ready="mapReady = true"

@@ -12,6 +12,7 @@ const props = defineProps<{
   selection: Selection | null
   routeIndex: Map<string, RouteInfo>
   stopTimesHref: string | null
+  allowedRouteNames: Set<string> | null
   vehicles: FeatureCollection<Point, VehicleProperties> | null
 }>()
 
@@ -20,6 +21,12 @@ const stopSelection = computed(() => props.selection?.kind === 'stop' ? props.se
 const vehicleSelection = computed(() => props.selection?.kind === 'vehicle' ? props.selection : null)
 
 const route = computed(() => routeSelection.value ? props.routeIndex.get(routeSelection.value.routeId) ?? null : null)
+
+// une ligne masquée par la configuration ne figure pas dans les badges de l'arrêt
+const stopRoutes = computed(() => {
+  const routes = stopSelection.value?.routes ?? []
+  return props.allowedRouteNames ? routes.filter(name => props.allowedRouteNames!.has(name)) : routes
+})
 
 // véhicule résolu dans le flux courant : vitesse et fraîcheur suivent le polling,
 // l'instantané de sélection sert de repli quand le véhicule quitte le flux
@@ -43,8 +50,9 @@ const vehicle = computed(() => {
     :key="stopSelection.stopId"
     :stop-id="stopSelection.stopId"
     :stop-name="stopSelection.stopName"
-    :routes="stopSelection.routes"
+    :routes="stopRoutes"
     :stop-times-href="stopTimesHref"
+    :allowed-route-names="allowedRouteNames"
   />
   <vehicle-details
     v-else-if="vehicle"

@@ -13,6 +13,8 @@ L'application s'appuie sur le traitement [processing-gtfs](https://github.com/da
 
 La configuration ne demande que la sélection du jeu de métadonnées : les 3 jeux liés sont détectés automatiquement (`relatedDatasets`, classification par schéma) et injectés dans la configuration dans des champs cachés. L'URL du flux GTFS-RT est découverte dans les pièces jointes distantes et téléchargée via le proxy data-fair : pas de contrainte de CORS.
 
+L'onglet « Affichage » permet de filtrer les lignes du réseau : toutes, uniquement une sélection, ou toutes sauf une sélection. Le filtre s'applique partout (tracés, arrêts, véhicules temps réel, légende et prochains passages) ; une liste vide équivaut à toutes les lignes.
+
 ## Couches de la carte
 
 - tracés des lignes, colorés d'après `route_color` ;

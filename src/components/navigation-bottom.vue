@@ -20,6 +20,7 @@ const props = defineProps<{
   selection: Selection | null
   routeIndex: Map<string, RouteInfo>
   stopTimesHref: string | null
+  allowedRouteNames: Set<string> | null
   vehicles: FeatureCollection<Point, VehicleProperties> | null
 }>()
 
@@ -73,6 +74,7 @@ watch(() => props.selection, (value) => {
           :selection="selection"
           :route-index="routeIndex"
           :stop-times-href="stopTimesHref"
+          :allowed-route-names="allowedRouteNames"
           :vehicles="vehicles"
         />
         <map-legend

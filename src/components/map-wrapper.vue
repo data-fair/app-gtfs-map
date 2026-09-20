@@ -28,6 +28,7 @@ const props = defineProps<{
   vehicleCount: number
   selection: Selection | null
   stopTimesHref: string | null
+  allowedRouteNames: Set<string> | null
   panelPosition: 'left' | 'right'
   largePanel: boolean
 }>()
@@ -83,6 +84,7 @@ const mapColsXl = computed(() => 12 - panelColsXl.value)
       :selection="selection"
       :route-index="routeIndex"
       :stop-times-href="stopTimesHref"
+      :allowed-route-names="allowedRouteNames"
       :vehicles="vehicles"
       @select-route="emit('select-route', $event)"
     />
@@ -111,6 +113,7 @@ const mapColsXl = computed(() => 12 - panelColsXl.value)
         :selection="selection"
         :route-index="routeIndex"
         :stop-times-href="stopTimesHref"
+        :allowed-route-names="allowedRouteNames"
         :vehicles="vehicles"
         @select-route="emit('select-route', $event)"
       />
@@ -162,6 +165,7 @@ const mapColsXl = computed(() => 12 - panelColsXl.value)
         :selection="selection"
         :route-index="routeIndex"
         :stop-times-href="stopTimesHref"
+        :allowed-route-names="allowedRouteNames"
         :vehicles="vehicles"
         @select-route="emit('select-route', $event)"
       />

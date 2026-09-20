@@ -8,7 +8,9 @@ import {
   contrastTextColor,
   datasetDocUrl,
   familyFromConfig,
+  filterFeaturesByRoutes,
   filterPlatformStops,
+  filterStopsByRouteNames,
   findRealtimeUrl,
   gtfsInsertBeforeId,
   hasRealtimeAttachment,
@@ -17,6 +19,7 @@ import {
   normalizeColor,
   normalizeStopRoutes,
   parseGtfsTime,
+  resolveAllowedRouteIds,
   selectDepartures
 } from '../../src/composables/gtfs'
 
@@ -218,6 +221,56 @@ test.describe('couleurs GTFS', () => {
   })
 })
 
+test.describe('filtre de lignes', () => {
+  const allIds = ['A', 'B', 'C']
+
+  test('resolveAllowedRouteIds : mode « toutes » ou liste vide = pas de filtre', () => {
+    expect(resolveAllowedRouteIds('all', ['A'], allIds)).toBeNull()
+    expect(resolveAllowedRouteIds(undefined, ['A'], allIds)).toBeNull()
+    expect(resolveAllowedRouteIds('include', [], allIds)).toBeNull()
+    expect(resolveAllowedRouteIds('exclude', [], allIds)).toBeNull()
+  })
+
+  test('resolveAllowedRouteIds : inclusion et exclusion', () => {
+    expect([...resolveAllowedRouteIds('include', ['A', 'B'], allIds)!]).toEqual(['A', 'B'])
+    expect([...resolveAllowedRouteIds('exclude', ['B'], allIds)!]).toEqual(['A', 'C'])
+    // identifiants numériques : la comparaison passe par String()
+    expect([...resolveAllowedRouteIds('include', [1 as any], [1 as any])!]).toEqual(['1'])
+    expect([...resolveAllowedRouteIds('exclude', ['1'], [1 as any, 2 as any])!]).toEqual(['2'])
+  })
+
+  test('filterFeaturesByRoutes retire les tracés des lignes masquées', () => {
+    const fc: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] }, properties: { route_id: 'A' } },
+        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] }, properties: { route_id: 'B' } },
+        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] }, properties: {} }
+      ] as FeatureCollection['features']
+    }
+    const filtered = filterFeaturesByRoutes(fc, 'route_id', new Set(['A']))
+    expect(filtered?.features.map(f => f.properties!.route_id)).toEqual(['A'])
+    // collection d'origine intacte, et pas de filtre = même objet
+    expect(fc.features).toHaveLength(3)
+    expect(filterFeaturesByRoutes(fc, 'route_id', null)).toBe(fc)
+  })
+
+  test('filterStopsByRouteNames retire les arrêts dont aucune ligne n\'est autorisée', () => {
+    const fc: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: { stop_id: 'S1', routes: '1;2' } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: { stop_id: 'S2', routes: ['2'] } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: { stop_id: 'S3' } }
+      ] as FeatureCollection['features']
+    }
+    const filtered = filterStopsByRouteNames(fc, new Set(['1']))
+    expect(filtered?.features.map(f => f.properties!.stop_id)).toEqual(['S1'])
+    expect(filterStopsByRouteNames(fc, null)).toBe(fc)
+    expect(filterStopsByRouteNames(null, new Set(['1']))).toBeNull()
+  })
+})
+
 test.describe('prochains passages', () => {
   // mercredi 9 septembre 2026, 10 h 30
   const now = new Date(2026, 8, 9, 10, 30, 0)
@@ -238,6 +291,18 @@ test.describe('prochains passages', () => {
     ]
     const departures = selectDepartures(rows, now)
     expect(departures.map(d => d.time)).toEqual(['10:45', '12:00'])
+  })
+
+  test('restreint les passages aux lignes autorisées', () => {
+    const rows = [
+      { route_name: '1', arrival_time: '11:00:00', week: 'Mercredi' },
+      { route_name: '2', arrival_time: '11:10:00', week: 'Mercredi' },
+      { arrival_time: '11:20:00', week: 'Mercredi' }
+    ]
+    expect(selectDepartures(rows, now, new Set(['1'])).map(d => d.routeName)).toEqual(['1'])
+    expect(selectDepartures(rows, now, null)).toHaveLength(3)
+    // un passage sans nom de ligne est masqué par un filtre actif
+    expect(selectDepartures(rows, now, new Set(['1'])).every(d => d.routeName === '1')).toBe(true)
   })
 
   test('applique la validité du service : jour de la semaine et période', () => {

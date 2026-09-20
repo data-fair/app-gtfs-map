@@ -89,6 +89,18 @@ export function feedToVehicles (
   return decodeFeed(buffer, routeIndex, fallbackColor).collection
 }
 
+/** Restreint les véhicules aux lignes autorisées par la configuration (`null` = toutes). */
+export function filterVehiclesByRoutes (
+  collection: VehicleCollection,
+  allowed: Set<string> | null
+): VehicleCollection {
+  if (!allowed) return collection
+  return {
+    ...collection,
+    features: collection.features.filter(f => allowed.has(String(f.properties.routeId)))
+  }
+}
+
 /**
  * Polling du flux GTFS-RT : décodage protobuf et mise à jour d'une FeatureCollection.
  * Le fetch passe par le proxy data-fair (pièce jointe distante) : pas de CORS.

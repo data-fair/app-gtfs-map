@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
-import { decodeFeed, feedToVehicles, type VehicleCollection } from '../../src/composables/use-vehicles'
+import { decodeFeed, feedToVehicles, filterVehiclesByRoutes, type VehicleCollection } from '../../src/composables/use-vehicles'
 
 // le paquet est CommonJS : import par défaut requis hors bundler
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
@@ -123,4 +123,19 @@ test('signale un flux de véhicules sans position comme vide', async () => {
   const decoded = decodeFeed(buffer, routeIndex, fallbackColor)
   expect(decoded.status).toBe('empty')
   expect(decoded.collection.features).toHaveLength(0)
+})
+
+test('filterVehiclesByRoutes restreint aux lignes autorisées', () => {
+  const collection = feedToVehicles(buildFeed([
+    { id: 'v1', vehicle: { trip: { routeId: 'ROUTE-A' }, position: { latitude: 47.1, longitude: -1.5 } } },
+    { id: 'v2', vehicle: { trip: { routeId: 'ROUTE-B' }, position: { latitude: 47.2, longitude: -1.6 } } }
+  ]), routeIndex, fallbackColor)
+
+  const filtered = filterVehiclesByRoutes(collection, new Set(['ROUTE-A']))
+  expect(filtered.features.map(f => f.properties.routeId)).toEqual(['ROUTE-A'])
+  // collection d'origine intacte
+  expect(collection.features).toHaveLength(2)
+
+  // sans filtre (null), la collection est renvoyée telle quelle
+  expect(filterVehiclesByRoutes(collection, null)).toBe(collection)
 })

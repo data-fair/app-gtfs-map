@@ -190,6 +190,32 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
   })
 
+  test('la configuration peut restreindre l\'affichage à une sélection de lignes', async ({ page }) => {
+    await mockApp(page, { vehicles: 2, config: { routes: { mode: 'include', ids: ['A'] } } })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    // seule la ligne 1 est listée et seuls ses véhicules sont comptés
+    await expect(panel.locator('.route-item')).toHaveCount(1, { timeout: 15000 })
+    await expect(panel.locator('.route-item .route-badge')).toContainText('1')
+    await expect(panel.getByText(/1 véhicule/)).toBeVisible({ timeout: 10000 })
+
+    // un arrêt desservi par les deux lignes ne montre que le badge autorisé
+    await clickMapAt(page, [-1.54, 47.205])
+    await expect(panel.getByText('Gare Centrale')).toBeVisible()
+    await expect(panel.locator('.gtfs-details .route-badge')).toHaveCount(1)
+  })
+
+  test('la configuration peut masquer une sélection de lignes', async ({ page }) => {
+    await mockApp(page, { vehicles: 2, config: { routes: { mode: 'exclude', ids: ['A'] } } })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(1, { timeout: 15000 })
+    await expect(panel.locator('.route-item .route-badge')).toContainText('2')
+    await expect(panel.getByText(/1 véhicule/)).toBeVisible({ timeout: 10000 })
+  })
+
   test('le clic sur une ligne de la carte ouvre le détail sans filtrer', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')

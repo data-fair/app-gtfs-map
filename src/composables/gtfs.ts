@@ -199,6 +199,67 @@ export function filterPlatformStops (fc: FeatureCollection | null): FeatureColle
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Filtre de lignes (configuration)                                    */
+/* ------------------------------------------------------------------ */
+
+export type RouteFilterMode = 'all' | 'include' | 'exclude'
+
+/**
+ * Identifiants des lignes conservées par le filtre de configuration.
+ *
+ * - `null` quand aucun filtre ne s'applique (mode « toutes » ou liste vide) ;
+ * - en mode « include », la liste sélectionnée ;
+ * - en mode « exclude », toutes les lignes des tracés moins la liste sélectionnée
+ *   (les lignes sans tracé ne peuvent pas être listées, elles restent donc masquées).
+ */
+export function resolveAllowedRouteIds (
+  mode: string | undefined,
+  configured: string[] | undefined,
+  allRouteIds: Iterable<string>
+): Set<string> | null {
+  const ids = (configured ?? []).map(String).filter(Boolean)
+  if ((mode !== 'include' && mode !== 'exclude') || !ids.length) return null
+  const selected = new Set(ids)
+  if (mode === 'include') return selected
+  const allowed = new Set<string>()
+  for (const id of allRouteIds) {
+    const value = String(id)
+    if (value && !selected.has(value)) allowed.add(value)
+  }
+  return allowed
+}
+
+/** Retire d'une collection les features dont la propriété `field` n'est pas une ligne autorisée. */
+export function filterFeaturesByRoutes (
+  fc: FeatureCollection | null,
+  field: string,
+  allowed: Set<string> | null
+): FeatureCollection | null {
+  if (!fc || !allowed) return fc
+  return {
+    ...fc,
+    features: fc.features.filter(f => {
+      const value = (f.properties as Record<string, unknown> | null)?.[field]
+      return value != null && value !== '' && allowed.has(String(value))
+    })
+  }
+}
+
+/** Retire les arrêts dont aucune ligne desservie n'est autorisée. */
+export function filterStopsByRouteNames (
+  fc: FeatureCollection | null,
+  allowedNames: Set<string> | null
+): FeatureCollection | null {
+  if (!fc || !allowedNames) return fc
+  return {
+    ...fc,
+    features: fc.features.filter(f =>
+      normalizeStopRoutes((f.properties as Record<string, unknown> | null)?.routes)
+        .some(name => allowedNames.has(name)))
+  }
+}
+
 export interface RouteInfo {
   routeId: string
   shortName: string
@@ -247,14 +308,17 @@ export function parseGtfsTime (value?: string | null): number | null {
 /**
  * Filtre et met en forme les prochains passages d'un arrêt aujourd'hui (fonction pure) :
  * validité du service (jour de la semaine, période), heures à venir, tri, dédoublonnage.
+ * `allowedRouteNames` restreint aux lignes autorisées par la configuration (la colonne
+ * `route_name` du jeu « horaires » porte le nom court, avec repli sur le nom long).
  */
-export function selectDepartures (rows: any[], now: Date): Departure[] {
+export function selectDepartures (rows: any[], now: Date, allowedRouteNames?: Set<string> | null): Departure[] {
   const today = dayjs(now).format('YYYY-MM-DD')
   const dayName = DAY_NAMES[(now.getDay() + 6) % 7]
   const nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
 
   const departures: Departure[] = []
   for (const row of rows) {
+    if (allowedRouteNames && !allowedRouteNames.has(row.route_name ?? '')) continue
     if (row.start_date && row.start_date > today) continue
     if (row.end_date && row.end_date < today) continue
     if (row.week && !String(row.week).split(';').includes(dayName)) continue
@@ -302,8 +366,9 @@ export function buildDeparturesUrl (stopTimesHref: string, stopId: string, now: 
 export async function loadDepartures (
   stopTimesHref: string,
   stopId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  allowedRouteNames?: Set<string> | null
 ): Promise<Departure[]> {
   const result = await fetchJson<{ results?: any[] }>(buildDeparturesUrl(stopTimesHref, stopId, now))
-  return selectDepartures(result.results ?? [], now)
+  return selectDepartures(result.results ?? [], now, allowedRouteNames)
 }

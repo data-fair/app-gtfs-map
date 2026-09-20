@@ -79,7 +79,7 @@ export function createConfig () {
           // - app → UI : { field, value } (update par path)
           if (content.configuration) {
             config.value = content.configuration
-          } else if (content.datasets || content.realtime || content.map) {
+          } else if (content.datasets || content.realtime || content.map || content.routes) {
             // Fusionner plutôt qu'écraser : certains émetteurs n'envoient
             // qu'un sous-arbre modifié (perte des champs frères sinon).
             config.value = { ...config.value, ...content }
