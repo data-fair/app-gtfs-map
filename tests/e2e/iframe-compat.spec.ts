@@ -1,8 +1,8 @@
 // Compatibilité d-frame — le shim v-iframe-compat injecté par DataFair quand
 // l'app est embarquée (portail, dashboard) lit window.vIframeOptions pour
 // appliquer les updateSrc du parent sans recharger l'iframe.
-import { expect, test } from '@playwright/test'
-import { mockApp } from './fixtures'
+import { expect } from '@playwright/test'
+import { mockApp, test } from './fixtures'
 
 test.describe('compatibilité d-frame (shim v-iframe-compat)', () => {
   test('expose reactiveSearchParams au shim dès l\'évaluation du module', async ({ page }) => {

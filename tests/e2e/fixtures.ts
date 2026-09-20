@@ -1,8 +1,19 @@
 /// <reference types="node" />
+import { test as base } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
 
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
+
+// Les handlers de route de mockApp peuvent être encore en vol à la fin d'un test
+// (requêtes de l'app non attendues par le test) : purge silencieuse en teardown,
+// sinon Playwright marque le test en échec (« Test ended » while running route callback).
+export const test = base.extend({
+  page: async ({ page }, use) => {
+    await use(page)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+  }
+})
 
 /** Info de site minimale lue par createSession sans requête (script _public.js). */
 const PUBLIC_SITE_INFO = {
@@ -201,8 +212,12 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
   await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: DOCS['gtfs-stops'] }))
   await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: DOCS['gtfs-stoptimes'] }))
   await page.route('**/api/v1/datasets/gtfs-shapes/lines*', async route => {
-    if (options.shapesDelayMs) await new Promise(resolve => setTimeout(resolve, options.shapesDelayMs))
-    await page.evaluate(() => { (window as any).__shapesAt = Date.now() })
+    // __shapesAt n'est lu que pour contrôler l'ordre capture/rendu : ne l'évaluer
+    // que dans ce cas, sinon l'evaluate peut s'exécuter après la fin du test
+    if (options.shapesDelayMs) {
+      await new Promise(resolve => setTimeout(resolve, options.shapesDelayMs))
+      await page.evaluate(() => { (window as any).__shapesAt = Date.now() })
+    }
     await route.fulfill({ json: SHAPES_GEOJSON })
   })
   await page.route('**/api/v1/datasets/gtfs-stops/lines*', route => route.fulfill({ json: STOPS_GEOJSON }))

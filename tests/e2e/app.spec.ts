@@ -1,8 +1,22 @@
-import { expect, test, type Page } from '@playwright/test'
-import { mockApp } from './fixtures'
+import { expect, type Page } from '@playwright/test'
+import { mockApp, test } from './fixtures'
 
-/** Clique sur la carte aux coordonnées géographiques données. */
-async function clickMapAt (page: Page, lngLat: [number, number]) {
+/**
+ * Clique sur la carte aux coordonnées géographiques données.
+ * `empty: true` pour un clic volontairement dans le vide (désélection).
+ */
+async function clickMapAt (page: Page, lngLat: [number, number], { empty = false }: { empty?: boolean } = {}) {
+  if (empty) {
+    await page.waitForFunction(() => window.__MAP__!.loaded())
+  } else {
+    // les sources GeoJSON sont taillées et rendues de façon asynchrone : sans cette
+    // attente, queryRenderedFeatures peut ne rien trouver et le clic est pris pour
+    // un clic dans le vide (détail jamais ouvert) — instabilité observée sous charge
+    await expect.poll(() => page.evaluate(([lng, lat]) => {
+      const m = window.__MAP__!
+      return m.queryRenderedFeatures(m.project([lng, lat])).length
+    }, lngLat), { timeout: 15000 }).toBeGreaterThan(0)
+  }
   const box = (await page.locator('.maplibregl-canvas').boundingBox())!
   const point = await page.evaluate(([lng, lat]) => {
     const p = window.__MAP__!.project([lng, lat])
@@ -231,7 +245,7 @@ test.describe('app-gtfs-map', () => {
     expect(filter).toBe(true)
 
     // clic sur la carte vide : le détail est refermé
-    await clickMapAt(page, [-1.5, 47.18])
+    await clickMapAt(page, [-1.5, 47.18], { empty: true })
     await expect(panel.getByText('Ligne 1')).toBeHidden()
   })
 
