@@ -32,6 +32,43 @@
               }
             }
           ]
+        },
+        "routes": {
+          "type": "object",
+          "title": "Lignes affichées",
+          "description": "Restreint la carte, la légende, les arrêts, les véhicules et les prochains passages à une sélection de lignes. Une liste vide équivaut à toutes les lignes.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "title": "Filtre",
+              "default": "all",
+              "oneOf": [
+                { "const": "all", "title": "Toutes les lignes" },
+                { "const": "include", "title": "Uniquement les lignes sélectionnées" },
+                { "const": "exclude", "title": "Toutes les lignes sauf celles sélectionnées" }
+              ]
+            },
+            "ids": {
+              "type": "array",
+              "title": "Lignes",
+              "items": { "type": "string" },
+              "layout": {
+                "if": "rootData.routes && rootData.routes.mode !== 'all'",
+                "comp": "autocomplete",
+                "props": {
+                  "chips": true,
+                  "closableChips": true,
+                  "noDataText": "Aucune ligne disponible : sélectionnez d'abord un jeu de données GTFS produit par le traitement."
+                },
+                "getItems": {
+                  "url": "${(rootData.datasets ?? []).find(d => (d.schema ?? []).some(p => p.key === 'route_short_name'))?.href || ''}/lines?select=route_id,route_short_name,route_long_name&size=10000",
+                  "itemsResults": "[...new Map((data.results ?? []).filter(r => r.route_id).map(r => [String(r.route_id), r])).values()].sort((a, b) => (a.route_short_name || a.route_long_name || '').localeCompare(b.route_short_name || b.route_long_name || '', 'fr', { numeric: true }))",
+                  "itemKey": "String(data.route_id)",
+                  "itemTitle": "data.route_short_name || data.route_long_name || (typeof data === 'string' ? data : String(data.route_id))"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -140,42 +177,6 @@
               "description": "Utilisée pour les lignes et véhicules sans couleur GTFS (route_color).",
               "default": "#1976D2",
               "layout": "color-picker"
-            }
-          }
-        },
-        "routes": {
-          "type": "object",
-          "title": "Lignes affichées",
-          "description": "Restreint la carte, la légende, les arrêts, les véhicules et les prochains passages à une sélection de lignes. Une liste vide équivaut à toutes les lignes.",
-          "properties": {
-            "mode": {
-              "type": "string",
-              "title": "Filtre",
-              "default": "all",
-              "oneOf": [
-                { "const": "all", "title": "Toutes les lignes" },
-                { "const": "include", "title": "Uniquement les lignes sélectionnées" },
-                { "const": "exclude", "title": "Toutes les lignes sauf celles sélectionnées" }
-              ]
-            },
-            "ids": {
-              "type": "array",
-              "title": "Lignes",
-              "items": { "type": "string" },
-              "layout": {
-                "if": "rootData.routes && rootData.routes.mode !== 'all'",
-                "props": {
-                  "chips": true,
-                  "closableChips": true,
-                  "noDataText": "Aucune ligne disponible : sélectionnez d'abord un jeu de données GTFS produit par le traitement."
-                },
-                "getItems": {
-                  "url": "${(rootData.datasets ?? []).find(d => (d.schema ?? []).some(p => p.key === 'route_short_name'))?.href || ''}/lines?select=route_id,route_short_name,route_long_name&size=10000",
-                  "itemsResults": "[...new Map((data.results ?? []).filter(r => r.route_id).map(r => [String(r.route_id), r])).values()]",
-                  "itemKey": "String(data.route_id)",
-                  "itemTitle": "data.route_short_name || data.route_long_name || String(data.route_id)"
-                }
-              }
             }
           }
         },
