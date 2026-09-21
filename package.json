@@ -1,6 +1,6 @@
 {
   "name": "@data-fair/app-gtfs-map",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A map application for data-fair: GTFS network with real-time vehicles",
   "type": "module",
   "author": "data-fair",
