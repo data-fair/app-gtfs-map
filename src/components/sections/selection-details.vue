@@ -51,6 +51,7 @@ const vehicle = computed(() => {
     :stop-id="stopSelection.stopId"
     :stop-name="stopSelection.stopName"
     :routes="stopRoutes"
+    :route-index="routeIndex"
     :stop-times-href="stopTimesHref"
     :allowed-route-names="allowedRouteNames"
   />

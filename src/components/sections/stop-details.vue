@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import RouteBadge from '../route-badge.vue'
-import { loadDepartures, type Departure } from '@/composables/gtfs.js'
+import { colorsByShortName, loadDepartures, type Departure, type RouteInfo } from '@/composables/gtfs.js'
 
 const props = defineProps<{
   stopId: string
   stopName: string
   routes: string[]
+  routeIndex: Map<string, RouteInfo>
   stopTimesHref: string | null
   allowedRouteNames: Set<string> | null
 }>()
+
+// les arrêts et les horaires portent le nom court de ligne, pas route_id
+const colors = computed(() => colorsByShortName(props.routeIndex))
+const routeColor = (name: string) => colors.value.get(name) ?? '#607D8B'
 
 const departures = ref<Departure[] | null>(null)
 const loadError = ref(false)
@@ -37,7 +42,7 @@ onMounted(async () => {
         v-for="route in routes.slice(0, 12)"
         :key="route"
         :route-name="route"
-        color="#607D8B"
+        :color="routeColor(route)"
         class="mr-1"
       />
     </div>
@@ -76,7 +81,7 @@ onMounted(async () => {
           <RouteBadge
             v-if="departure.routeName"
             :route-name="departure.routeName"
-            :color="departure.color ?? '#607D8B'"
+            :color="departure.color ?? routeColor(departure.routeName)"
           />
           <span
             v-if="departure.destination"

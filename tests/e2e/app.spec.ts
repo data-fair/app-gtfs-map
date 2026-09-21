@@ -180,12 +180,48 @@ test.describe('app-gtfs-map', () => {
       .toEqual(['==', ['get', 'route_id'], 'A'])
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-vehicles-circle')))
       .toEqual(['==', ['get', 'routeId'], 'A'])
+    // les arrêts sont filtrés par nom court de ligne (les arrêts portent `routes`, pas route_id)
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-stops-circle')))
+      .toEqual(['in', '1', ['get', 'routes']])
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-stops-labels')))
+      .toEqual(['in', '1', ['get', 'routes']])
 
     // re-clic : la ligne est désélectionnée, le filtre levé et le détail refermé
     await panel.locator('.route-item').first().click()
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines'))).toBe(true)
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-vehicles-circle'))).toBe(true)
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-stops-circle'))).toBe(true)
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-stops-labels'))).toBe(true)
     await expect(panel.getByText('Ligne 1')).toBeHidden()
+  })
+
+  test('le filtre de ligne masque les arrêts des autres lignes', async ({ page }) => {
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+
+    // la sélection d'une ligne recadre la carte : revenir sur le réseau pour que
+    // les deux arrêts soient dans la vue et interrogeables
+    const showNetwork = () => page.evaluate(() => window.__MAP__!.jumpTo({ center: [-1.535, 47.2], zoom: 12.9 }))
+    const renderedStops = () => page.evaluate(() => [
+      ...new Set(window.__MAP__!.queryRenderedFeatures({ layers: ['gtfs-stops-circle'] })
+        .map(f => (f.properties as any).stop_id as string))
+    ].sort())
+
+    // sans filtre : les deux arrêts (hors station parente) sont rendus
+    await showNetwork()
+    await expect.poll(renderedStops, { timeout: 15000 }).toEqual(['S1', 'S2'])
+
+    // ligne 2 : seul l'arrêt desservi par les deux lignes reste rendu
+    await panel.locator('.route-item').nth(1).click()
+    await showNetwork()
+    await expect.poll(renderedStops, { timeout: 15000 }).toEqual(['S1'])
+
+    await panel.locator('.route-item').nth(1).click()
+    await showNetwork()
+    await expect.poll(renderedStops, { timeout: 15000 }).toEqual(['S1', 'S2'])
   })
 
   test('le filtre de ligne restreint les véhicules et le compteur de la légende', async ({ page }) => {
@@ -259,7 +295,11 @@ test.describe('app-gtfs-map', () => {
     await clickMapAt(page, [-1.54, 47.205])
     await expect(panel.getByText('Gare Centrale')).toBeVisible()
     // routes reçues en tableau par l'API GeoJSON : les deux badges de ligne sont rendus
-    await expect(panel.locator('.gtfs-details .route-badge')).toHaveCount(2)
+    const badges = panel.locator('.gtfs-details .route-badge')
+    await expect(badges).toHaveCount(2)
+    // chaque badge porte la couleur de sa ligne (route_color des tracés), plus de gris fixe
+    await expect(badges.nth(0)).toHaveCSS('background-color', 'rgb(255, 136, 0)')
+    await expect(badges.nth(1)).toHaveCSS('background-color', 'rgb(51, 170, 51)')
   })
 
   test('mobile : bottom nav pour la légende et le détail', async ({ page }) => {

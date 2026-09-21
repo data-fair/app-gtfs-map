@@ -222,6 +222,13 @@ function applyHighlight (fit = false) {
     ? ['==', ['get', 'routeId'], props.highlightRouteId]
     : true
   if (map.getLayer(VEHICLES_LAYER)) map.setFilter(VEHICLES_LAYER, vehicleFilter)
+  // les arrêts portent les noms courts des lignes desservies (`routes`), pas route_id :
+  // résoudre la ligne sélectionnée par son nom court depuis l'index des lignes
+  const route = props.highlightRouteId ? props.routeIndex.get(props.highlightRouteId) : null
+  const stopFilter: any = route?.shortName ? ['in', route.shortName, ['get', 'routes']] : true
+  for (const layer of [STOPS_LAYER, STOPS_LABELS_LAYER]) {
+    if (map.getLayer(layer)) map.setFilter(layer, stopFilter)
+  }
   // cadrage sur la ligne : à la sélection utilisateur, ou à la restauration d'un
   // lien qui porte la ligne sans position. Une vue URL complète prime toujours.
   if (fit && props.highlightRouteId) {

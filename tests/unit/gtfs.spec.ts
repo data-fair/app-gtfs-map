@@ -5,6 +5,7 @@ import {
   buildDeparturesUrl,
   buildRouteIndex,
   classifyDataset,
+  colorsByShortName,
   contrastTextColor,
   datasetDocUrl,
   familyFromConfig,
@@ -191,6 +192,26 @@ test.describe('couleurs GTFS', () => {
     expect(index.size).toBe(2)
     expect(index.get('A')).toMatchObject({ shortName: '1', longName: 'Gare - Plage', color: '#FF8800' })
     expect(index.get('B')?.color).toBe('#1976D2')
+  })
+
+  test('colorsByShortName indexe les couleurs par nom court, premier doublon conservé', () => {
+    const fc = {
+      type: 'FeatureCollection' as const,
+      features: [
+        { type: 'Feature' as const, geometry: null as any, properties: { route_id: 'A', route_short_name: '1', route_color: 'FF8800' } },
+        { type: 'Feature' as const, geometry: null as any, properties: { route_id: 'B', route_short_name: '2', route_color: '33AA33' } },
+        { type: 'Feature' as const, geometry: null as any, properties: { route_id: 'A2', route_short_name: '1', route_color: '000000' } },
+        { type: 'Feature' as const, geometry: null as any, properties: { route_id: 'C', route_short_name: '', route_color: 'FFFFFF' } }
+      ]
+    }
+    const colors = colorsByShortName(buildRouteIndex(fc, '#1976D2'))
+    expect(colors.get('1')).toBe('#FF8800')
+    expect(colors.get('2')).toBe('#33AA33')
+    // garde-fou : un nom court vide n'entre pas dans l'index
+    const withEmpty = colorsByShortName(new Map([
+      ['C', { routeId: 'C', shortName: '', longName: '', color: '#FFFFFF' }]
+    ]))
+    expect(withEmpty.size).toBe(0)
   })
 
   test('filterPlatformStops retire les stations parentes, garde plateformes et flux sans location_type', () => {

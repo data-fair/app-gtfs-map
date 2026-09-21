@@ -267,6 +267,19 @@ export interface RouteInfo {
   color: string
 }
 
+/**
+ * Couleurs des lignes indexées par nom court : les arrêts et les horaires portent
+ * le nom court, pas `route_id`. En cas de doublon (deux route_id de même nom court),
+ * la première couleur rencontrée est conservée.
+ */
+export function colorsByShortName (routeIndex: Map<string, RouteInfo>): Map<string, string> {
+  const colors = new Map<string, string>()
+  for (const route of routeIndex.values()) {
+    if (route.shortName && !colors.has(route.shortName)) colors.set(route.shortName, route.color)
+  }
+  return colors
+}
+
 /** Index route_id → infos de ligne, construit depuis les propriétés des tracés. */
 export function buildRouteIndex (shapes: FeatureCollection | null, fallback: string): Map<string, RouteInfo> {
   const index = new Map<string, RouteInfo>()
