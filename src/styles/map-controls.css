@@ -41,6 +41,16 @@
 .maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
   box-sizing: content-box;
 }
+/* the controls follow the edge of a drawer laid over the map (--map-panel-cover-*, map-panel.vue),
+   with the drawer's own transition */
+.maplibregl-map :is(.maplibregl-ctrl-top-left, .maplibregl-ctrl-bottom-left) {
+  left: var(--map-panel-cover-left, 0px);
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.maplibregl-map :is(.maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-right) {
+  right: var(--map-panel-cover-right, 0px);
+  transition: right 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
 /* the unfolded credit wraps inside the map, clear of a drawer laid over it (--map-panel-cover, map-panel.vue) */
 .maplibregl-map {
   container-type: inline-size;
