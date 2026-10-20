@@ -1,11 +1,10 @@
 import type { VehicleProperties } from './use-vehicles.js'
 
 /**
- * Élément dont le détail est affiché dans la section « Sélection » du panneau :
- * une ligne, un arrêt ou un véhicule. La ligne n'est stockée que par son
- * identifiant, résolu au rendu depuis l'index des lignes (données toujours
- * fraîches) ; le véhicule porte un instantané utilisé en repli quand il
- * disparaît du flux temps réel.
+ * Item detailed in the panel "Selection" section: a route, a stop or a vehicle.
+ * A route is stored by id only and resolved at render time from the route index
+ * (always fresh data); a vehicle carries a snapshot used as fallback when it
+ * leaves the realtime feed.
  */
 export type Selection =
   | { kind: 'route', routeId: string }

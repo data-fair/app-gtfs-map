@@ -11,23 +11,23 @@ import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 import App from './App.vue'
 import { createConfig } from './composables/config'
 
-// shim v-iframe-compat injecté par DataFair (d-frame, portail/dashboard) : sans
-// cette exposition, chaque updateSrc du parent retombe sur window.location.href
-// → rechargement complet de l'iframe → clignotement. Au niveau module, avant createApp.
+// read by the v-iframe-compat shim DataFair injects (d-frame, portal/dashboard): without
+// it, every parent updateSrc falls back to window.location.href → full iframe reload
+// → flicker. Module level, before createApp.
 window.vIframeOptions = { reactiveParams: reactiveSearchParams }
 
 async function init () {
-  // vuetifySessionOptions lève sans session.site.value : le <script> _public.js
-  // d'index.html pose window.__PUBLIC_SITE_INFO, lu sans fetch ; siteInfo déclenche
-  // refreshSiteInfo, déprécié, et ne reste qu'en repli si le script n'a pas été servi
+  // vuetifySessionOptions throws without session.site.value: the _public.js <script>
+  // in index.html sets window.__PUBLIC_SITE_INFO, read without fetch; siteInfo triggers
+  // the deprecated refreshSiteInfo and only remains as a fallback if the script was not served
   const session = await createSession({
     directoryUrl: '/simple-directory',
     siteInfo: !window.__PUBLIC_SITE_INFO
   })
 
-  // createI18n APRÈS la session, avec la locale définitive.
-  // fallbackLocale: 'en' → les blocs <i18n> de lib-vuetify n'ont que fr et en :
-  // sans repli, une session d'une autre langue affiche les clés brutes.
+  // createI18n AFTER the session, with the final locale.
+  // fallbackLocale 'en': lib-vuetify <i18n> blocks only have fr and en, so
+  // without fallback a session in another language shows raw keys.
   const i18n = createI18n({
     legacy: false,
     locale: session.lang.value,

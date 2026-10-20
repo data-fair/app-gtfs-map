@@ -1,4 +1,5 @@
 {
+  "x-exports": ["types"],
   "type": "object",
   "required": ["datasets"],
   "layout": "tabs",
@@ -122,6 +123,7 @@
                 { "const": "void", "title": "Vide" },
                 { "const": "admindiv", "title": "Divisions administratives" },
                 { "const": "dark-matter", "title": "Dark Matter" },
+                { "const": "dark-koumoul", "title": "Koumoul sombre" },
                 { "const": "fiord-color", "title": "Fiord Color" },
                 { "const": "osm-bright", "title": "OSM Bright" },
                 { "const": "positron", "title": "Positron" },
@@ -129,7 +131,8 @@
                 { "const": "cassini", "title": "Cassini" },
                 { "const": "cadastre", "title": "Cadastre" },
                 { "const": "satellite", "title": "Vue satellite" },
-                { "const": "plan-ign-standard", "title": "Plan IGN" }
+                { "const": "plan-ign-standard", "title": "Plan IGN" },
+                { "const": "plan-ign-ortho", "title": "Photographies aériennes (IGN)" }
               ]
             },
             "lineWidth": {

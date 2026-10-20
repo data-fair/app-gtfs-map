@@ -1,33 +1,64 @@
+<template>
+  <div
+    ref="container"
+    class="gtfs-map position-absolute top-0 left-0 w-100 h-100"
+  />
+</template>
+
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
+import type { GeoJSONSource, LngLatBoundsLike, MapGeoJSONFeature, PaddingOptions, StyleSpecification } from 'maplibre-gl'
+import type { Feature, FeatureCollection, Point } from 'geojson'
+import type { Selection } from '@/composables/selection.js'
+import type { VehicleProperties } from '@/composables/use-vehicles.js'
+import type { RouteInfo } from '@/composables/gtfs.js'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDebounceFn } from '@vueuse/core'
 import * as maplibregl from 'maplibre-gl'
-import type { GeoJSONSource, LngLatBoundsLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl'
-import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@/styles/map-controls.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
-import { gtfsInsertBeforeId, normalizeStopRoutes, type RouteInfo } from '@/composables/gtfs.js'
-import type { Selection } from '@/composables/selection.js'
-import type { VehicleProperties } from '@/composables/use-vehicles.js'
+import { normalizeStopRoutes } from '@/composables/gtfs.js'
+import { basemaps, createBasemapSwitch, credentialsFor, firstSymbolLayer, mapLocale, resolveMapStyle } from '@/utils/map-styles'
 import { FoldedAttributionControl } from '@/utils/folded-attribution'
 import { applyInitialView, readViewParams, resolveInitialView, writeViewParams } from '@/utils/initial-view'
+import { keepInView, withCover } from '@/utils/keep-in-view'
 
 maplibregl.setWorkerUrl(workerUrl)
 
-const props = defineProps({
-  shapes: { type: Object as PropType<FeatureCollection | null>, default: null },
-  stops: { type: Object as PropType<FeatureCollection | null>, default: null },
-  vehicles: { type: Object as PropType<FeatureCollection<Point, VehicleProperties> | null>, default: null },
-  routeIndex: { type: Map as PropType<Map<string, RouteInfo>>, required: true },
-  styleUrl: { type: String, required: true },
-  lineWidth: { type: Number, default: 4 },
-  stopRadius: { type: Number, default: 5 },
-  vehicleSize: { type: Number, default: 8 },
-  fitKey: { type: String as PropType<string | null>, default: null },
-  highlightRouteId: { type: String as PropType<string | null>, default: null }
+const props = withDefaults(defineProps<{
+  shapes?: FeatureCollection | null
+  stops?: FeatureCollection | null
+  vehicles?: FeatureCollection<Point, VehicleProperties> | null
+  routeIndex: Map<string, RouteInfo>
+  basemap: string
+  lineWidth?: number
+  stopRadius?: number
+  vehicleSize?: number
+  fitKey?: string | null
+  highlightRouteId?: string | null
+  // side of the map controls, given by the panel (its own side)
+  controls?: 'left' | 'right'
+  // something is selected (its details are shown)
+  selected?: boolean
+  // the part of the map under an overlaying panel, given by the panel
+  cover?: Partial<PaddingOptions>
+}>(), {
+  shapes: null,
+  stops: null,
+  vehicles: null,
+  lineWidth: 4,
+  stopRadius: 5,
+  vehicleSize: 8,
+  fitKey: null,
+  highlightRouteId: null,
+  controls: 'right',
+  selected: false,
+  cover: () => ({})
 })
+
+const { locale } = useI18n()
 
 const emit = defineEmits<{
   (e: 'ready'): void
@@ -38,10 +69,10 @@ const emit = defineEmits<{
 const container = ref<HTMLElement>()
 let map: maplibregl.Map | null = null
 let loaded = false
-// distingue le premier chargement d'un rechargement de style (setStyle) :
-// ce dernier préserve la caméra maplibre et ne doit pas recentrer sur le réseau
+// tells the first load from a style reload (setStyle): the latter keeps
+// the maplibre camera and must not recenter on the network
 let initialLoad = true
-// les handlers liés à une couche survivent à setStyle : ne les enregistrer qu'une fois
+// layer-bound handlers survive setStyle: register them only once
 let interactionsBound = false
 
 const LINES_SOURCE = 'gtfs-shapes'
@@ -56,22 +87,23 @@ const VEHICLES_LAYER = 'gtfs-vehicles-circle'
 const emptyFc = (): FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
 /* ------------------------------------------------------------------ */
-/* Navigation persistée dans l'URL (lng, lat, zoom)                    */
+/* Navigation persisted in the URL (lng, lat, zoom)                   */
 /* ------------------------------------------------------------------ */
 
-// vue complète lue une seule fois au montage : centre/zoom initiaux de la carte
+// a shared link (lng, lat, zoom), read once on mount; else the highlighted route, then the network
+// once loaded, then metropolitan France
 const urlView = readViewParams(reactiveSearchParams)
 
-// the view shown before the first fit (a resize in a background tab) must never reach a shared link
+// debounce: a continuous gesture (wheel, pinch) emits many moveend, and
+// each URL write sends a stateChange to the parent (portal, dashboard)
+// the France view shown before the first fit must never reach a shared link
 let viewSettled = !!urlView
-// debounce : un geste continu (molette, pincement) émet de nombreux moveend, et
-// chaque écriture d'URL envoie un stateChange au parent (portail, dashboard)
 const persistView = useDebounceFn(() => {
   if (!map || !viewSettled) return
   writeViewParams(reactiveSearchParams, map.getCenter(), map.getZoom())
 }, 250)
 
-// expressions maplibre : tableaux typés « large » pour contourner les unions d'expressions
+// maplibre expressions: loosely typed arrays to work around expression unions
 const lineColor = ['get', 'color'] as any
 const lineWidthExpr = () => ([
   'interpolate', ['linear'], ['zoom'],
@@ -89,14 +121,10 @@ const vehicleRadiusExpr = () => ([
   16, props.vehicleSize * 1.25
 ]) as any
 
-function beforeLayerId (): string | undefined {
-  // insère les données au-dessus des routes du fond de carte, sous les labels pour rester lisibles
-  return gtfsInsertBeforeId(map?.getStyle()?.layers ?? [])
-}
-
 function addSourcesAndLayers () {
   if (!map) return
-  const before = beforeLayerId()
+  // computed on the basemap layers alone, before any data layer is added
+  const before = firstSymbolLayer(map.getStyle()?.layers ?? [])
 
   const ensureSource = (id: string, data: FeatureCollection) => {
     if (map!.getSource(id)) {
@@ -114,7 +142,7 @@ function addSourcesAndLayers () {
     map!.addLayer(layer, before)
   }
 
-  // couche de hit invisible : la ligne visible est trop fine pour cliquer facilement
+  // invisible hit layer: the visible line is too thin to click easily
   addLayer({
     id: LINES_HIT_LAYER,
     type: 'line',
@@ -140,6 +168,7 @@ function addSourcesAndLayers () {
 
   const style = map.getStyle() as StyleSpecification | undefined
   const hasGlyphs = !!style?.glyphs
+  const darkBasemap = basemaps.find(b => b.id === currentBasemap())?.dark
   if (hasGlyphs) {
     addLayer({
       id: STOPS_LABELS_LAYER,
@@ -153,11 +182,11 @@ function addSourcesAndLayers () {
         'text-anchor': 'top',
         'text-optional': true
       },
-      paint: {
-        'text-halo-color': '#ffffff',
-        'text-halo-width': 1.5,
-        'text-color': '#333333'
-      }
+      // contrast with the basemap, not with the app theme; literal colours: the maplibre
+      // canvas cannot read the Vuetify CSS variables
+      paint: darkBasemap
+        ? { 'text-halo-color': '#212121', 'text-halo-width': 1.5, 'text-color': '#eeeeee' }
+        : { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5, 'text-color': '#333333' }
     }, before)
   }
 
@@ -190,8 +219,8 @@ function addSourcesAndLayers () {
     loaded = true
     if (initialLoad) {
       initialLoad = false
-      // vue de l'URL si présente (lien partagé / rafraîchissement), sinon cadrage
-      // réseau — ou sur la ligne restaurée d'un lien qui ne porte pas de position
+      // URL view if present (shared link / refresh), else fit on the network
+      // or on the route restored from a link that carries no position
       if (!urlView) {
         if (props.highlightRouteId) applyHighlight(true)
         else fitNetwork()
@@ -209,30 +238,30 @@ function applyHighlight (fit = false) {
   for (const layer of [LINES_LAYER, LINES_HIT_LAYER]) {
     if (map.getLayer(layer)) map.setFilter(layer, filter)
   }
-  // les véhicules portent routeId (camelCase), pas route_id (propriété GTFS des tracés)
+  // vehicles carry routeId (camelCase), not route_id (GTFS shapes property)
   const vehicleFilter: any = props.highlightRouteId
     ? ['==', ['get', 'routeId'], props.highlightRouteId]
     : true
   if (map.getLayer(VEHICLES_LAYER)) map.setFilter(VEHICLES_LAYER, vehicleFilter)
-  // les arrêts portent les noms courts des lignes desservies (`routes`), pas route_id :
-  // résoudre la ligne sélectionnée par son nom court depuis l'index des lignes
+  // stops carry the short names of served routes (`routes`), not route_id:
+  // resolve the selected route by its short name from the route index
   const route = props.highlightRouteId ? props.routeIndex.get(props.highlightRouteId) : null
   const stopFilter: any = route?.shortName ? ['in', route.shortName, ['get', 'routes']] : true
   for (const layer of [STOPS_LAYER, STOPS_LABELS_LAYER]) {
     if (map.getLayer(layer)) map.setFilter(layer, stopFilter)
   }
-  // cadrage sur la ligne : à la sélection utilisateur, ou à la restauration d'un
-  // lien qui porte la ligne sans position. Une vue URL complète prime toujours.
+  // fit on the route: on user selection, or when restoring a link that
+  // carries the route without a position. A full URL view always wins.
   if (fit && props.highlightRouteId) {
     const bounds = routeBounds(props.highlightRouteId)
     if (bounds) {
-      map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 })
+      map.fitBounds(bounds, { padding: withCover(60, props.cover), maxZoom: 14, duration: 600 })
       viewSettled = true
     }
   }
 }
 
-/** Aplati les coordonnées d'une géométrie en liste de positions. */
+/** Flattens a geometry's coordinates into a list of positions. */
 function featureCoords (geometry: Feature['geometry']): number[][] {
   switch (geometry.type) {
     case 'Point': return [geometry.coordinates]
@@ -267,7 +296,7 @@ function fitNetwork () {
   for (const feature of fc.features) {
     for (const c of featureCoords(feature.geometry)) bounds.extend(c as [number, number])
   }
-  map.fitBounds(bounds, { padding: 30, maxZoom: 14, duration: 0 })
+  map.fitBounds(bounds, { padding: withCover(30, props.cover), maxZoom: 14, duration: 0 })
   viewSettled = true
 }
 
@@ -277,10 +306,10 @@ function onVisible () {
 }
 
 /* ------------------------------------------------------------------ */
-/* Sélection                                                           */
+/* Selection                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Convertit la feature rendue sous le curseur en sélection pour le panneau. */
+/** Converts the feature rendered under the cursor into a panel selection. */
 function selectionFromFeature (feature: MapGeoJSONFeature): Selection | null {
   const p = feature.properties as Record<string, any>
   switch (feature.layer.id) {
@@ -307,8 +336,8 @@ function bindInteractions () {
   cursor(STOPS_LAYER)
   cursor(VEHICLES_LAYER)
 
-  // un seul handler : la feature la plus haute (véhicule > arrêt > ligne) gagne,
-  // et un clic sur la carte vide désélectionne
+  // a single handler: the topmost feature (vehicle > stop > route) wins,
+  // and a click on the empty map deselects
   map.on('click', (e) => {
     const features = map!.queryRenderedFeatures(e.point, {
       layers: [VEHICLES_LAYER, STOPS_LAYER, LINES_HIT_LAYER]
@@ -319,55 +348,90 @@ function bindInteractions () {
   })
 }
 
+// last basemap requested (a failed style falls back to the previous one)
+let basemapSwitch: ReturnType<typeof createBasemapSwitch> | null = null
+const currentBasemap = () => basemapSwitch?.current() ?? props.basemap
+
+// the tileserver styles carry no IGN attribution: it depends on the basemap
+let attribution: maplibregl.AttributionControl | null = null
+function setAttribution () {
+  if (!map) return
+  if (attribution) map.removeControl(attribution)
+  attribution = new FoldedAttributionControl({
+    compact: true,
+    customAttribution: basemaps.find(b => b.id === currentBasemap())?.attribution
+  })
+  map.addControl(attribution, `bottom-${props.controls}`)
+}
+
+let navigation: maplibregl.NavigationControl | null = null
+let scale: maplibregl.ScaleControl | null = null
+function setControls () {
+  if (!map) return
+  if (navigation) map.removeControl(navigation)
+  if (scale) map.removeControl(scale)
+  navigation = new maplibregl.NavigationControl({ showCompass: false })
+  scale = new maplibregl.ScaleControl()
+  map.addControl(navigation, `top-${props.controls}`)
+  map.addControl(scale, `bottom-${props.controls}`)
+  setAttribution()
+}
+
 onMounted(() => {
   if (!container.value) return
   map = new maplibregl.Map({
     container: container.value,
-    style: props.styleUrl,
+    style: resolveMapStyle(props.basemap, window.location.origin),
     attributionControl: false,
-    zoomLevelsToOverscale: undefined
+    locale: mapLocale(locale.value),
+    transformRequest: credentialsFor(window.location.origin)
   })
-  // the shared link, else metropolitan France until the network is fitted
   applyInitialView(map, resolveInitialView({ params: reactiveSearchParams }))
-  document.addEventListener('visibilitychange', onVisible)
+  basemapSwitch = createBasemapSwitch(map, props.basemap, window.location.origin)
   if (import.meta.env.DEV) window.__MAP__ = map
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-  map.addControl(new FoldedAttributionControl({ compact: true }), 'bottom-right')
-  // toute fin de déplacement (pan, zoom, fitBounds) est reportée dans l'URL
+  setControls()
+  // every move end (pan, zoom, fitBounds) is reported in the URL
   map.on('moveend', (e) => {
     // a user move settles the view even when nothing could be fitted (unknown route, empty network)
     if (e.originalEvent) viewSettled = true
     persistView()
   })
-  // style.load se déclenche au chargement initial et après chaque setStyle (changement de fond)
+  const kept = keepInView(map, { selected: () => props.selected, cover: () => props.cover })
+  watch(() => props.cover, kept.check)
+  document.addEventListener('visibilitychange', onVisible)
+  // style.load fires on initial load and after each setStyle (basemap change)
   map.on('style.load', () => {
     loaded = false
+    setAttribution()
     addSourcesAndLayers()
     bindInteractions()
   })
 })
 
 onBeforeUnmount(() => {
+  // persist any pending view before destroying the map
   document.removeEventListener('visibilitychange', onVisible)
-  // persiste une éventuelle vue en attente avant de détruire la carte
   persistView.flush()
   map?.remove()
   map = null
+  attribution = null
+  navigation = null
+  scale = null
+  basemapSwitch = null
   interactionsBound = false
 })
 
-watch(() => props.styleUrl, () => {
-  map?.setStyle(props.styleUrl)
-})
+watch(() => props.controls, setControls)
+watch(() => props.basemap, (basemap) => basemapSwitch?.set(basemap))
 watch(() => props.shapes, () => {
   const source = map?.getSource(LINES_SOURCE) as GeoJSONSource | undefined
   if (source) source.setData(props.shapes ?? emptyFc())
   if (props.shapes?.features.length && loaded) {
-    // ligne restaurée depuis l'URL ou sélectionnée : cadrer sur elle une fois
-    // les tracés (et donc l'index des lignes) disponibles — sauf si la vue URL
-    // complète doit primer
+    // route restored from the URL or selected: fit on it once the shapes
+    // (hence the route index) are available, unless the full URL view
+    // must win
     if (props.highlightRouteId) applyHighlight(!urlView)
-    // sinon cadrage réseau, sauf si une vue de l'URL est déjà appliquée
+    // else fit on the network, unless a URL view is already applied
     else if (!urlView) fitNetwork()
   }
 })
@@ -384,24 +448,8 @@ watch(() => props.stopRadius, () => map?.setPaintProperty(STOPS_LAYER, 'circle-r
 watch(() => props.vehicleSize, () => map?.setPaintProperty(VEHICLES_LAYER, 'circle-radius', vehicleRadiusExpr() as any))
 watch(() => props.highlightRouteId, () => applyHighlight(true))
 
-// recentrage sur le réseau quand la famille de jeux change
+// recenter on the network when the dataset family changes
 watch(() => props.fitKey, () => {
   if (loaded) fitNetwork()
 })
 </script>
-
-<template>
-  <div
-    ref="container"
-    class="gtfs-map"
-    role="region"
-    aria-label="Carte du réseau de transport"
-  />
-</template>
-
-<style scoped>
-.gtfs-map {
-  position: absolute;
-  inset: 0;
-}
-</style>

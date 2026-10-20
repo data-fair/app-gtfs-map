@@ -1,6 +1,7 @@
-import { computed, inject, ref, type App, type ComputedRef, type Ref } from 'vue'
+import type { App, ComputedRef, Ref } from 'vue'
 import type { Application, Dataset } from '@data-fair/lib-common-types/application/index.js'
 import type { Config } from '@/config/index.js'
+import { computed, inject, ref } from 'vue'
 
 export interface ConfigState {
   application: Application & { href: string, apiUrl: string, exposedUrl?: string }
@@ -11,21 +12,22 @@ export interface ConfigState {
   error: ComputedRef<string | null>
 }
 
-/** Vrai quand l'application est servie par data-fair en mode brouillon de configuration. */
+/** True when data-fair serves the app in configuration draft mode. */
 export function isDraftMode (search = window.location.search): boolean {
   return new URLSearchParams(search).get('draft') === 'true'
 }
 
 export function createConfig () {
   const application = window.APPLICATION as Application & { href: string, apiUrl: string }
-  const config = ref<any>(application?.configuration || {})
+  const config = ref<Config>((application?.configuration || {}) as Config)
 
-  // Jeu de métadonnées GTFS sélectionné dans le formulaire de configuration
-  const dataset = computed(() => (config.value as Config)?.datasets?.[0] as unknown as Dataset | undefined)
+  // GTFS metadata dataset selected in the configuration form
+  const dataset = computed(() => config.value?.datasets?.[0] as unknown as Dataset | undefined)
 
   const error = computed(() => {
-    if (!config.value) return 'Il n\'y a pas de configuration définie'
-    if (!dataset.value) return 'Veuillez sélectionner un jeu de données GTFS'
+    // message keys, translated by the component that shows them
+    if (!config.value) return 'noConfig'
+    if (!dataset.value) return 'noDataset'
     return null
   })
 
@@ -37,9 +39,9 @@ export function createConfig () {
     if (window.parent !== window) {
       window.parent.postMessage({
         type: 'set-config',
-        // les valeurs viennent de l'état réactif Vue : un Proxy (ex. le schéma d'un jeu
-        // lu dans config.value) ne passe pas le structured clone de postMessage
-        // (DataCloneError) et faisait échouer silencieusement toute la synchronisation
+        // values come from Vue reactive state: a Proxy (e.g. a dataset schema read
+        // from config.value) fails postMessage structured clone (DataCloneError)
+        // and silently broke the whole sync
         content: { field, value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) }
       }, window.location.origin)
     }
@@ -74,17 +76,17 @@ export function createConfig () {
       window.addEventListener('message', (event) => {
         if (event.data?.type === 'set-config' && event.data?.content) {
           const { content } = event.data
-          // Formats réellement émis par l'UI DataFair (application-config.vue) :
-          // - UI → app : la config complète directement dans content
-          // - app → UI : { field, value } (update par path)
+          // Formats actually emitted by the DataFair UI (application-config.vue):
+          // - UI → app: full config directly in content
+          // - app → UI: { field, value } (update by path)
           if (content.configuration) {
             config.value = content.configuration
           } else if (content.datasets || content.realtime || content.map || content.routes) {
-            // Fusionner plutôt qu'écraser : certains émetteurs n'envoient
-            // qu'un sous-arbre modifié (perte des champs frères sinon).
+            // Merge rather than overwrite: some emitters only send
+            // the modified subtree (sibling fields would be lost).
             config.value = { ...config.value, ...content }
           } else if (content.field && 'value' in content) {
-            // Update par path (ex: 'realtime.url')
+            // Update by path (e.g. 'realtime.url')
             const newConfig = JSON.parse(JSON.stringify(config.value))
             setByPath(newConfig, content.field, content.value)
             config.value = newConfig

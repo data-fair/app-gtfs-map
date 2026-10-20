@@ -1,19 +1,21 @@
-import dayjs from 'dayjs'
 import type { FeatureCollection } from 'geojson'
-import { fetchJson } from './http.js'
+import type { TransitMode } from '../utils/transit-mode.js'
+import dayjs from 'dayjs'
+import { transitMode } from '../utils/transit-mode.js'
 
 /**
- * Types et helpers du domaine GTFS produit par processing-gtfs :
- * - 1 jeu « métadonnées » sans données, porteur des pièces jointes (archive + flux GTFS-RT distant)
- * - 3 jeux liés déclarés dans relatedDatasets : tracés, arrêts, horaires
+ * GTFS domain types and helpers, as produced by processing-gtfs:
+ * - 1 "metadata" dataset without data, carrying the attachments (archive + remote GTFS-RT feed)
+ * - 3 related datasets declared in relatedDatasets: shapes, stops, departures
  */
 
 export interface LinkedRef {
   id: string
   href: string
   title: string
-  /** schéma du jeu lié, porté par les entrées poussées dans configuration.datasets pour rester classifiables en mode draft */
+  /** related dataset schema, carried by the entries pushed into configuration.datasets to stay classifiable in draft mode */
   schema?: Array<{ key?: string }>
+  finalizedAt?: string
 }
 
 export type ResourceKind = 'shapes' | 'stops' | 'stop-times'
@@ -33,15 +35,15 @@ const KIND_FIELDS: [ResourceKind, string[]][] = [
 ]
 
 /**
- * Détecte le rôle d'un jeu de données d'après son schéma (les titres peuvent être renommés
- * par l'exploitant, le schéma produit par le traitement est stable).
+ * Detects a dataset role from its schema (titles may be renamed by the operator,
+ * the schema produced by the processing is stable).
  */
 export function classifyDataset (doc: { schema?: Array<{ key?: string }>, title?: string }): ResourceKind | null {
   const keys = new Set((doc.schema ?? []).map(p => p.key).filter(Boolean))
   for (const [kind, fields] of KIND_FIELDS) {
     if (fields.some(f => keys.has(f))) return kind
   }
-  // repli : suffixe de titre posé par le traitement (« Réseau - tracés », etc.)
+  // fallback: title suffix set by the processing ("Réseau - tracés", etc.)
   const title = (doc.title ?? '').toLowerCase()
   if (title.endsWith('- tracés')) return 'shapes'
   if (title.endsWith('- arrêts')) return 'stops'
@@ -50,9 +52,9 @@ export function classifyDataset (doc: { schema?: Array<{ key?: string }>, title?
 }
 
 /**
- * Classifie les jeux liés référencés dans configuration.datasets (entrées d'index ≥ 1 ;
- * l'entrée 0 est le jeu de métadonnées sélectionné). Ces entrées sont écrites uniquement
- * par postMessage (use-family), jamais éditées dans le formulaire.
+ * Classifies the related datasets referenced in configuration.datasets (entries at index ≥ 1;
+ * entry 0 is the selected metadata dataset). These entries are only written
+ * via postMessage (use-family), never edited in the form.
  */
 export function familyFromConfig (
   datasets: Array<LinkedRef | undefined> | undefined
@@ -67,36 +69,36 @@ export function familyFromConfig (
 }
 
 /**
- * URL d'un document de jeu de données.
+ * URL of a dataset document.
  *
- * `apiUrl` (injecté par le proxy data-fair et par le dev-server) est la seule base
- * fiable : l'application est servie sous `/app/{id}`, où une URL relative `api/v1/...`
- * partirait sur `/app/api/v1/...`.
+ * `apiUrl` (injected by the data-fair proxy and the dev-server) is the only reliable
+ * base: the app is served under `/app/{id}`, where a relative `api/v1/...` URL
+ * would resolve to `/app/api/v1/...`.
  */
 export function datasetDocUrl (apiUrl: string, id: string): string {
   return `${apiUrl.replace(/\/$/, '')}/datasets/${encodeURIComponent(id)}`
 }
 
-/** Vrai si la pièce jointe est le flux GTFS-RT déclaré par le traitement. */
+/** True if the attachment is the GTFS-RT feed declared by the processing. */
 export const isRealtimeAttachment = (attachment: { type?: string, name?: string }): boolean =>
   attachment.type === 'remoteFile' && /^gtfs-rt/i.test(attachment.name ?? '')
 
-/** Vrai si `doc` référence le jeu `selectedId` (liens bidirectionnels posés par le traitement). */
+/** True if `doc` references the `selectedId` dataset (bidirectional links set by the processing). */
 export const linksBackTo = (doc: { relatedDatasets?: Array<{ id: string }> }, selectedId: string | undefined): boolean =>
   !!selectedId && (doc.relatedDatasets ?? []).some(r => r.id === selectedId)
 
-/** Vrai si le document porte le flux GTFS-RT déclaré par le traitement. */
+/** True if the document carries the GTFS-RT feed declared by the processing. */
 export const hasRealtimeAttachment = (doc: MetadataDoc): boolean =>
   (doc.attachments ?? []).some(isRealtimeAttachment)
 
 /**
- * URL de la pièce jointe distante du flux GTFS-RT, à travers le proxy data-fair
- * (l'URL réelle du flux n'est jamais exposée au navigateur, pas de contrainte CORS).
- * Le lien public calculé par data-fair (`attachment.url`) est prioritaire : lui seul
- * tient compte du domaine public de l'instance. Reconstruction en repli pour les
- * réponses qui ne le portent pas (mocks, instances anciennes).
- * Seules les pièces jointes préfixées `gtfs-rt` sont retenues : un autre fichier distant
- * ajouté à la main ne doit pas être décodé comme du protobuf.
+ * URL of the GTFS-RT feed remote attachment, through the data-fair proxy
+ * (the real feed URL is never exposed to the browser, no CORS constraint).
+ * The public link computed by data-fair (`attachment.url`) takes precedence: only it
+ * accounts for the instance public domain. Rebuilt as a fallback for responses
+ * that lack it (mocks, older instances).
+ * Only attachments prefixed with `gtfs-rt` are kept: another manually added remote
+ * file must not be decoded as protobuf.
  */
 export function findRealtimeUrl (doc: MetadataDoc): string | null {
   const rt = (doc.attachments ?? []).find(isRealtimeAttachment)
@@ -107,14 +109,14 @@ export function findRealtimeUrl (doc: MetadataDoc): string | null {
   return `${base}/metadata-attachments/${encodeURIComponent(rt.name)}`
 }
 
-/** Extrait une couleur CSS d'une valeur GTFS route_color (« 00AAFF » ou « #00AAFF »). */
+/** Extracts a CSS color from a GTFS route_color value ("00AAFF" or "#00AAFF"). */
 export function normalizeColor (raw?: string | null): string | null {
   const v = (raw ?? '').trim()
   if (!/^#?[0-9a-fA-F]{6}$/.test(v)) return null
   return v.startsWith('#') ? v : `#${v}`
 }
 
-/** Couleur de texte lisible (WCAG) sur un fond hexadécimal donné. */
+/** Readable (WCAG) text color on a given hex background. */
 export function contrastTextColor (raw?: string | null): string {
   const hex = normalizeColor(raw)
   if (!hex) return '#ffffff'
@@ -126,43 +128,42 @@ export function contrastTextColor (raw?: string | null): string {
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
   const luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-  // 0.179 = luminance limite pour un contraste 4.5:1 avec noir ou blanc
+  // 0.179 = threshold luminance for a 4.5:1 contrast with black or white
   return luminance > 0.179 ? '#111111' : '#ffffff'
 }
 
 /* ------------------------------------------------------------------ */
-/* Chargement des couches géographiques                                */
+/* Geographic layers loading                                          */
 /* ------------------------------------------------------------------ */
 
 const API_SIZE = 10000
 
 export interface GeoJsonLayer {
   collection: FeatureCollection
-  /** total de lignes côté serveur, quand l'API le renvoie */
+  /** server-side line total, when the API returns it */
   total: number | null
-  /** l'API a renvoyé moins d'objets que le total (plafond de pagination atteint) */
+  /** the API returned fewer items than the total (pagination cap reached) */
   truncated: boolean
 }
 
 export const isTruncated = (total: number | null | undefined, count: number): boolean =>
   typeof total === 'number' && total > count
 
-/** Point d'insertion des couches GTFS dans le style du fond de carte :
- * au-dessus de la dernière couche « line » (routes, ponts...), sous les labels (« symbol ») suivants. */
-export function gtfsInsertBeforeId (layers: ReadonlyArray<{ id: string, type: string }>): string | undefined {
-  let lastLine = -1
-  layers.forEach((l, i) => { if (l.type === 'line') lastLine = i })
-  return layers.slice(lastLine + 1).find(l => l.type === 'symbol')?.id
+// finalizedAt only when known: an empty value would be cached forever by the service worker
+export function finalizedAtQuery (finalizedAt?: string): Record<string, string> {
+  return finalizedAt ? { finalizedAt } : {}
 }
 
-export async function loadGeoJson (href: string): Promise<GeoJsonLayer> {
-  const result = await fetchJson<FeatureCollection & { total?: number }>(`${href}/lines?format=geojson&size=${API_SIZE}`)
-  result.features = (result.features ?? []).filter(f => f.geometry)
-  const total = typeof result.total === 'number' ? result.total : null
-  return { collection: result, total, truncated: isTruncated(total, result.features.length) }
+export const geoJsonQuery = (finalizedAt?: string): Record<string, string | number> =>
+  ({ format: 'geojson', size: API_SIZE, ...finalizedAtQuery(finalizedAt) })
+
+export function toGeoJsonLayer (raw: FeatureCollection & { total?: number }): GeoJsonLayer {
+  const collection: FeatureCollection = { ...raw, features: (raw.features ?? []).filter(f => f.geometry) }
+  const total = typeof raw.total === 'number' ? raw.total : null
+  return { collection, total, truncated: isTruncated(total, collection.features.length) }
 }
 
-/** Normalise la couleur des tracés d'après route_color, avec repli. */
+/** Normalizes shape colors from route_color, with fallback. */
 export function applyFallbackColor (fc: FeatureCollection, fallback: string): FeatureCollection {
   for (const feature of fc.features) {
     const props = feature.properties as Record<string, unknown>
@@ -174,9 +175,9 @@ export function applyFallbackColor (fc: FeatureCollection, fallback: string): Fe
 }
 
 /**
- * Normalise les lignes desservies d'un arrêt. Le champ `routes` du schéma GTFS est
- * multivalué (`separator: ';'`) : l'API GeoJSON renvoie donc un tableau (les tableaux
- * sont préservés), tandis que l'API JSON joint les valeurs en une chaîne « 1;2 ».
+ * Normalizes the routes served by a stop. The GTFS schema `routes` field is
+ * multivalued (`separator: ';'`): the GeoJSON API returns an array (arrays are
+ * preserved), while the JSON API joins the values into a "1;2" string.
  */
 export function normalizeStopRoutes (raw: unknown): string[] {
   const values = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(';') : []
@@ -187,9 +188,9 @@ export function normalizeStopRoutes (raw: unknown): string[] {
 }
 
 /**
- * Retire les stations parentes (`location_type = 1`) du jeu « arrêts » : chaque pôle
- * porte alors une seule paire de plateformes (une par sens) au lieu de trois points.
- * Les features sans `location_type` sont conservées (les flux sans hiérarchie n'en ont pas).
+ * Removes parent stations (`location_type = 1`) from the stops dataset: each hub
+ * then carries a single pair of platforms (one per direction) instead of three points.
+ * Features without `location_type` are kept (feeds without hierarchy have none).
  */
 export function filterPlatformStops (fc: FeatureCollection | null): FeatureCollection | null {
   if (!fc) return fc
@@ -202,18 +203,18 @@ export function filterPlatformStops (fc: FeatureCollection | null): FeatureColle
 }
 
 /* ------------------------------------------------------------------ */
-/* Filtre de lignes (configuration)                                    */
+/* Route filter (configuration)                                       */
 /* ------------------------------------------------------------------ */
 
 export type RouteFilterMode = 'all' | 'include' | 'exclude'
 
 /**
- * Identifiants des lignes conservées par le filtre de configuration.
+ * Ids of the routes kept by the configuration filter.
  *
- * - `null` quand aucun filtre ne s'applique (mode « toutes » ou liste vide) ;
- * - en mode « include », la liste sélectionnée ;
- * - en mode « exclude », toutes les lignes des tracés moins la liste sélectionnée
- *   (les lignes sans tracé ne peuvent pas être listées, elles restent donc masquées).
+ * - `null` when no filter applies ("all" mode or empty list);
+ * - in "include" mode, the selected list;
+ * - in "exclude" mode, every route of the shapes minus the selected list
+ *   (routes without a shape cannot be listed, so they stay hidden).
  */
 export function resolveAllowedRouteIds (
   mode: string | undefined,
@@ -232,7 +233,7 @@ export function resolveAllowedRouteIds (
   return allowed
 }
 
-/** Retire d'une collection les features dont la propriété `field` n'est pas une ligne autorisée. */
+/** Removes from a collection the features whose `field` property is not an allowed route. */
 export function filterFeaturesByRoutes (
   fc: FeatureCollection | null,
   field: string,
@@ -248,7 +249,7 @@ export function filterFeaturesByRoutes (
   }
 }
 
-/** Retire les arrêts dont aucune ligne desservie n'est autorisée. */
+/** Removes the stops none of whose served routes is allowed. */
 export function filterStopsByRouteNames (
   fc: FeatureCollection | null,
   allowedNames: Set<string> | null
@@ -267,12 +268,14 @@ export interface RouteInfo {
   shortName: string
   longName: string
   color: string
+  /** from GTFS route_type, null when unknown */
+  mode?: TransitMode | null
 }
 
 /**
- * Couleurs des lignes indexées par nom court : les arrêts et les horaires portent
- * le nom court, pas `route_id`. En cas de doublon (deux route_id de même nom court),
- * la première couleur rencontrée est conservée.
+ * Route colors indexed by short name: stops and departures carry the short
+ * name, not `route_id`. On duplicates (two route_id with the same short name),
+ * the first color found is kept.
  */
 export function colorsByShortName (routeIndex: Map<string, RouteInfo>): Map<string, string> {
   const colors = new Map<string, string>()
@@ -282,7 +285,7 @@ export function colorsByShortName (routeIndex: Map<string, RouteInfo>): Map<stri
   return colors
 }
 
-/** Index route_id → infos de ligne, construit depuis les propriétés des tracés. */
+/** route_id → route info index, built from the shape properties. */
 export function buildRouteIndex (shapes: FeatureCollection | null, fallback: string): Map<string, RouteInfo> {
   const index = new Map<string, RouteInfo>()
   for (const feature of shapes?.features ?? []) {
@@ -293,14 +296,15 @@ export function buildRouteIndex (shapes: FeatureCollection | null, fallback: str
       routeId,
       shortName: props.route_short_name || props.route_long_name || routeId,
       longName: props.route_long_name || '',
-      color: normalizeColor(props.route_color) ?? fallback
+      color: normalizeColor(props.route_color) ?? fallback,
+      mode: transitMode(props.route_type)
     })
   }
   return index
 }
 
 /* ------------------------------------------------------------------ */
-/* Prochains passages (jeu « horaires »)                               */
+/* Next departures (departures dataset)                               */
 /* ------------------------------------------------------------------ */
 
 export interface Departure {
@@ -313,7 +317,7 @@ export interface Departure {
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 
-/** « HH:MM:SS » (l'heure peut dépasser 24 pour un service passant minuit) → secondes. */
+/** "HH:MM:SS" (the hour may exceed 24 for a service running past midnight) → seconds. */
 export function parseGtfsTime (value?: string | null): number | null {
   const m = /^(\d{1,2}):(\d{2}):(\d{2})$/.exec((value ?? '').trim())
   if (!m) return null
@@ -321,10 +325,10 @@ export function parseGtfsTime (value?: string | null): number | null {
 }
 
 /**
- * Filtre et met en forme les prochains passages d'un arrêt aujourd'hui (fonction pure) :
- * validité du service (jour de la semaine, période), heures à venir, tri, dédoublonnage.
- * `allowedRouteNames` restreint aux lignes autorisées par la configuration (la colonne
- * `route_name` du jeu « horaires » porte le nom court, avec repli sur le nom long).
+ * Filters and formats today's next departures at a stop (pure function):
+ * service validity (weekday, period), upcoming times, sorting, deduplication.
+ * `allowedRouteNames` restricts to the routes allowed by the configuration (the
+ * departures dataset `route_name` column carries the short name, falling back to the long name).
  */
 export function selectDepartures (rows: any[], now: Date, allowedRouteNames?: Set<string> | null): Departure[] {
   const today = dayjs(now).format('YYYY-MM-DD')
@@ -339,7 +343,7 @@ export function selectDepartures (rows: any[], now: Date, allowedRouteNames?: Se
     if (row.week && !String(row.week).split(';').includes(dayName)) continue
     const seconds = parseGtfsTime(row.departure_time) ?? parseGtfsTime(row.arrival_time)
     if (seconds == null) continue
-    // heure passant minuit (« 25:10:00 » = 1 h 10 le lendemain) : repli sur l'horloge du jour
+    // time past midnight ("25:10:00" = 1:10 the next day): fall back to the current day clock
     const clockSeconds = seconds >= 86400 ? seconds - 86400 : seconds
     if (clockSeconds < nowSeconds - 30) continue
     departures.push({
@@ -362,28 +366,13 @@ export function selectDepartures (rows: any[], now: Date, allowedRouteNames?: Se
 }
 
 /**
- * URL de recherche des passages d'un arrêt.
+ * Search query for a stop's departures.
  *
- * Le suffixe `_eq` est obligatoire : l'API search de data-fair ne reconnaît que les
- * suffixes `_eq`, `_in`, `_gte`, ... — une clé nue est silencieusement ignorée et la
- * requête repart sans filtre d'arrêt.
+ * The `_eq` suffix is mandatory: the data-fair search API only recognizes the
+ * `_eq`, `_in`, `_gte`, ... suffixes; a bare key is silently ignored and the
+ * request runs without the stop filter.
  */
-export function buildDeparturesUrl (stopTimesHref: string, stopId: string, now: Date = new Date()): string {
+export function departuresQuery (stopId: string, now: Date = new Date(), finalizedAt?: string): Record<string, string | number> {
   const minTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
-  return `${stopTimesHref}/lines?stop_id_eq=${encodeURIComponent(stopId)}&arrival_time_gte=${encodeURIComponent(minTime)}&sort=arrival_time&size=200`
-}
-
-/**
- * Prochains passages d'un arrêt aujourd'hui.
- * Le filtre serveur (égalité stop_id, heures >= maintenant en comparaison lexicographique,
- * valide pour des heures « HH:MM:SS ») est complété côté client par la validité du service.
- */
-export async function loadDepartures (
-  stopTimesHref: string,
-  stopId: string,
-  now: Date = new Date(),
-  allowedRouteNames?: Set<string> | null
-): Promise<Departure[]> {
-  const result = await fetchJson<{ results?: any[] }>(buildDeparturesUrl(stopTimesHref, stopId, now))
-  return selectDepartures(result.results ?? [], now, allowedRouteNames)
+  return { stop_id_eq: stopId, arrival_time_gte: minTime, sort: 'arrival_time', size: 200, ...finalizedAtQuery(finalizedAt) }
 }

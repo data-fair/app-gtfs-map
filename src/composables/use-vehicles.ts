@@ -1,10 +1,11 @@
-import { ref, shallowRef, watch, onScopeDispose, type Ref } from 'vue'
-import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
+import type { Ref } from 'vue'
 import type { Feature, FeatureCollection, Point } from 'geojson'
+import type { RouteInfo } from './gtfs.js'
+import { ref, shallowRef, watch, onScopeDispose } from 'vue'
+import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
 import { fetchBuffer } from './http.js'
-import { type RouteInfo } from './gtfs.js'
 
-// le paquet est CommonJS : import par défaut requis hors bundler
+// CommonJS package: default import required outside the bundler
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
 
 export interface VehicleProperties {
@@ -23,12 +24,12 @@ export type VehicleCollection = FeatureCollection<Point, VehicleProperties>
 const EMPTY: VehicleCollection = { type: 'FeatureCollection', features: [] }
 
 /**
- * État du flux temps réel décodé :
- * - `positions` : au moins une position de véhicule exploitable ;
- * - `trip-update` : flux TripUpdate, sans coordonnées (flux VehiclePositions attendu) ;
- * - `empty` : flux décodé mais sans aucune entité ;
- * - `error` : téléchargement ou décodage impossible ;
- * - `idle` : pas de flux configuré ou affichage désactivé.
+ * Decoded realtime feed state:
+ * - `positions`: at least one usable vehicle position;
+ * - `trip-update`: TripUpdate feed, no coordinates (VehiclePositions feed expected);
+ * - `empty`: decoded feed without any entity;
+ * - `error`: download or decoding failed;
+ * - `idle`: no feed configured or display disabled.
  */
 export type RealtimeFeedStatus = 'idle' | 'positions' | 'empty' | 'trip-update' | 'error'
 
@@ -38,7 +39,7 @@ export interface DecodedFeed {
   counts: { entities: number, positions: number, tripUpdates: number }
 }
 
-/** Décode un message GTFS-RT et classe le flux (positions, vide ou TripUpdate sans coordonnées). */
+/** Decodes a GTFS-RT message and classifies the feed (positions, empty, or TripUpdate without coordinates). */
 export function decodeFeed (
   buffer: ArrayBuffer,
   routeIndex: Map<string, RouteInfo>,
@@ -80,7 +81,7 @@ export function decodeFeed (
   }
 }
 
-/** Convertit un message GTFS-RT VehiclePositions en FeatureCollection. */
+/** Converts a GTFS-RT VehiclePositions message to a FeatureCollection. */
 export function feedToVehicles (
   buffer: ArrayBuffer,
   routeIndex: Map<string, RouteInfo>,
@@ -89,7 +90,7 @@ export function feedToVehicles (
   return decodeFeed(buffer, routeIndex, fallbackColor).collection
 }
 
-/** Restreint les véhicules aux lignes autorisées par la configuration (`null` = toutes). */
+/** Restricts vehicles to the routes allowed by the configuration (`null` = all). */
 export function filterVehiclesByRoutes (
   collection: VehicleCollection,
   allowed: Set<string> | null
@@ -102,8 +103,8 @@ export function filterVehiclesByRoutes (
 }
 
 /**
- * Polling du flux GTFS-RT : décodage protobuf et mise à jour d'une FeatureCollection.
- * Le fetch passe par le proxy data-fair (pièce jointe distante) : pas de CORS.
+ * GTFS-RT feed polling: protobuf decoding and FeatureCollection update.
+ * The fetch goes through the data-fair proxy (remote attachment): no CORS.
  */
 export function useVehicles (options: {
   url: Ref<string | undefined>
@@ -159,7 +160,7 @@ export function useVehicles (options: {
     poll()
     const intervalMs = Math.max(5, options.intervalSeconds.value || 15) * 1000
     timer = setInterval(() => {
-      // économise le flux quand l'onglet est en arrière-plan
+      // saves bandwidth while the tab is in the background
       if (document.visibilityState === 'visible') poll()
     }, intervalMs)
   }

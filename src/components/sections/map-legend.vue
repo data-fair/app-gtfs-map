@@ -1,48 +1,5 @@
-<script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { mdiAlertCircleOutline, mdiClockOutline } from '@mdi/js'
-import dayjs from 'dayjs'
-import RouteBadge from '../route-badge.vue'
-import type { RouteInfo } from '@/composables/gtfs.js'
-
-const { t } = useI18n()
-
-const props = defineProps<{
-  title: string
-  routes: RouteInfo[]
-  hasVehicles: boolean
-  lastUpdated: number | null
-  /** message expliquant un flux sans positions (vide ou TripUpdate) */
-  realtimeMessage: string | null
-  vehicleCount: number
-  /** ligne sélectionnée à l'extérieur de la légende (carte, URL) */
-  selectedRouteId?: string | null
-}>()
-
-const emit = defineEmits<{
-  (e: 'select-route', routeId: string | null): void
-}>()
-
-const selectedRouteId = ref<string | null>(props.selectedRouteId ?? null)
-
-// la sélection peut changer à l'extérieur (carte, URL, changement de réseau)
-watch(() => props.selectedRouteId, (value) => {
-  selectedRouteId.value = value ?? null
-})
-
-const sortedRoutes = computed(() => [...props.routes].sort((a, b) => a.shortName.localeCompare(b.shortName, 'fr', { numeric: true })))
-
-const lastUpdatedLabel = computed(() => props.lastUpdated ? dayjs(props.lastUpdated).format('HH:mm:ss') : null)
-
-function selectRoute (routeId: string | null | undefined) {
-  selectedRouteId.value = routeId ?? null
-  emit('select-route', selectedRouteId.value)
-}
-</script>
-
 <template>
-  <div class="map-legend">
+  <div>
     <div class="text-title-small mb-1">
       {{ title }}
     </div>
@@ -73,28 +30,88 @@ function selectRoute (routeId: string | null | undefined) {
       <div class="text-label-small text-uppercase text-medium-emphasis">
         {{ t('routes') }}
       </div>
-      <v-chip-group
-        :model-value="selectedRouteId"
-        column
-        selected-class="border-primary border-opacity-100"
-        @update:model-value="selectRoute"
+      <template
+        v-for="group in routeGroups"
+        :key="group.mode ?? 'none'"
       >
-        <RouteBadge
-          v-for="route in sortedRoutes"
-          :key="route.routeId"
-          class="route-item"
-          :class="{ selected: route.routeId === selectedRouteId }"
-          :value="route.routeId"
-          :route-name="route.shortName"
-          :color="route.color"
-          border="md opacity-0"
-          role="button"
-          :aria-pressed="route.routeId === selectedRouteId"
-        />
-      </v-chip-group>
+        <div
+          v-if="group.mode"
+          :id="`${uid}-${group.mode}`"
+          class="text-label-small text-medium-emphasis pt-1"
+        >
+          <TransitModeLabel :mode="group.mode" />
+        </div>
+        <!-- one group per mode, sharing the selection; padding (inside the clipped container) keeps the selection ring whole -->
+        <v-chip-group
+          :model-value="selectedRouteId"
+          class="mx-n1"
+          padding="4"
+          column
+          selected-class="route-item--selected"
+          :role="group.mode ? 'group' : undefined"
+          :aria-labelledby="group.mode ? `${uid}-${group.mode}` : undefined"
+          @update:model-value="selectRoute"
+        >
+          <RouteBadge
+            v-for="route in group.items"
+            :key="route.routeId"
+            class="route-item"
+            :value="route.routeId"
+            :route-name="route.shortName"
+            :color="route.color"
+            role="button"
+            :aria-pressed="route.routeId === selectedRouteId"
+          />
+        </v-chip-group>
+      </template>
     </template>
   </div>
 </template>
+
+<script setup lang="ts">
+import type { RouteInfo } from '@/composables/gtfs.js'
+import { computed, useId } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { mdiAlertCircleOutline, mdiClockOutline } from '@mdi/js'
+import dayjs from 'dayjs'
+import { countModes, groupByMode } from '@/utils/transit-mode'
+import RouteBadge from '../route-badge.vue'
+import TransitModeLabel from '../transit-mode-label.vue'
+
+const { t, locale } = useI18n()
+
+const props = defineProps<{
+  title: string
+  routes: RouteInfo[]
+  hasVehicles: boolean
+  lastUpdated: number | null
+  /** message explaining a feed without positions (empty or TripUpdate) */
+  realtimeMessage: string | null
+  vehicleCount: number
+  /** route selected outside the legend (map, URL) */
+  selectedRouteId?: string | null
+}>()
+
+const emit = defineEmits<{
+  (e: 'select-route', routeId: string | null): void
+}>()
+
+const sortedRoutes = computed(() => [...props.routes].sort((a, b) => a.shortName.localeCompare(b.shortName, locale.value, { numeric: true })))
+
+const uid = useId()
+
+// a single-mode network keeps the plain list, without group titles
+const showModes = computed(() => countModes(props.routes, r => r.mode ?? null) > 1)
+const routeGroups = computed(() => showModes.value
+  ? groupByMode(sortedRoutes.value, r => r.mode ?? null)
+  : [{ mode: null, items: sortedRoutes.value }])
+
+const lastUpdatedLabel = computed(() => props.lastUpdated ? dayjs(props.lastUpdated).format('HH:mm:ss') : null)
+
+function selectRoute (routeId: string | null | undefined) {
+  emit('select-route', routeId ?? null)
+}
+</script>
 
 <i18n lang="yaml">
 fr:
@@ -106,3 +123,12 @@ en:
   searching: Looking for vehicles…
   routes: Network routes
 </i18n>
+
+<style scoped>
+/* selected route: a ring in the text colour, 2px off the chip so the panel surface sets it apart
+whatever the route colour; an outline (not a box-shadow) is kept in forced-colors mode */
+.route-item--selected {
+  outline: 2px solid rgb(var(--v-theme-on-surface));
+  outline-offset: 2px;
+}
+</style>

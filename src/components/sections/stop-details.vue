@@ -1,39 +1,5 @@
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import RouteBadge from '../route-badge.vue'
-import { colorsByShortName, loadDepartures, type Departure, type RouteInfo } from '@/composables/gtfs.js'
-
-const { t } = useI18n()
-
-const props = defineProps<{
-  stopId: string
-  stopName: string
-  routes: string[]
-  routeIndex: Map<string, RouteInfo>
-  stopTimesHref: string | null
-  allowedRouteNames: Set<string> | null
-}>()
-
-// les arrêts et les horaires portent le nom court de ligne, pas route_id
-const colors = computed(() => colorsByShortName(props.routeIndex))
-const routeColor = (name: string) => colors.value.get(name) ?? '#607D8B'
-
-const departures = ref<Departure[] | null>(null)
-const loadError = ref(false)
-
-onMounted(async () => {
-  if (!props.stopTimesHref || !props.stopId) return
-  try {
-    departures.value = await loadDepartures(props.stopTimesHref, props.stopId, new Date(), props.allowedRouteNames)
-  } catch {
-    loadError.value = true
-  }
-})
-</script>
-
 <template>
-  <div class="gtfs-details">
+  <div>
     <div class="font-weight-bold mb-1">
       {{ stopName || t('stop') }}
     </div>
@@ -49,7 +15,7 @@ onMounted(async () => {
         class="mr-1"
       />
     </div>
-    <template v-if="stopTimesHref">
+    <template v-if="stopTimes">
       <div class="text-label-small text-uppercase text-medium-emphasis mt-2">
         {{ t('departures') }}
       </div>
@@ -95,6 +61,39 @@ onMounted(async () => {
     </template>
   </div>
 </template>
+
+<script setup lang="ts">
+import type { LinkedRef, RouteInfo } from '@/composables/gtfs.js'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useFetch } from '@data-fair/lib-vue/fetch.js'
+import RouteBadge from '../route-badge.vue'
+import { colorsByShortName, departuresQuery, selectDepartures } from '@/composables/gtfs.js'
+
+const { t } = useI18n()
+
+const props = defineProps<{
+  stopId: string
+  stopName: string
+  routes: string[]
+  routeIndex: Map<string, RouteInfo>
+  stopTimes: LinkedRef | null
+  fallbackColor: string
+  allowedRouteNames: Set<string> | null
+}>()
+
+// stops and departures carry the route short name, not route_id
+const colors = computed(() => colorsByShortName(props.routeIndex))
+const routeColor = (name: string) => colors.value.get(name) ?? props.fallbackColor
+
+// the component is keyed by stop: the time window is taken once, when it opens
+const now = new Date()
+const { data, error: loadError } = useFetch<{ results?: any[] }>(
+  () => props.stopTimes?.href && props.stopId ? `${props.stopTimes.href}/lines` : null,
+  { query: () => departuresQuery(props.stopId, now, props.stopTimes?.finalizedAt), notifError: false }
+)
+const departures = computed(() => data.value ? selectDepartures(data.value.results ?? [], now, props.allowedRouteNames) : null)
+</script>
 
 <style scoped>
 /* aligned columns of times: no Vuetify utility for tabular figures */

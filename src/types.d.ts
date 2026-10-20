@@ -14,7 +14,7 @@ declare global {
     vIframeOptions?: { reactiveParams: Record<string, string> }
     triggerCapture?: (animationSupported?: boolean) => boolean | Promise<boolean> | void
     animateCaptureFrame?: () => boolean
-    /** hook de test : instance maplibre, posé en DEV seulement (gtfs-map.vue) */
+    /** test hook: maplibre instance, set in DEV only (gtfs-map.vue) */
     __MAP__?: MLMap
   }
 }
