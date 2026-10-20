@@ -21,7 +21,7 @@ L'onglet « Source de données » permet de filtrer les lignes du réseau : tout
 - arrêts (noms affichés aux zooms élevés) ;
 - véhicules en temps réel, rafraîchis par polling du flux VehiclePositions (défaut : 15 s), colorés par ligne.
 
-Clic sur une ligne, un arrêt ou un véhicule pour un popup (les arrêts affichent les prochains passages du jour calculés à partir du jeu « horaires »).
+Un clic sur une ligne, un arrêt ou un véhicule ouvre son détail dans la section Sélection du panneau (les arrêts affichent les prochains passages du jour calculés à partir du jeu « horaires »).
 
 ## Développement
 

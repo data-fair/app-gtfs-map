@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const port = Number(env.APP_PORT ?? 3000)
   return {
-    base: env.PUBLIC_URL ?? '/app/',
+    base: env.PUBLIC_URL || '/app/',
     plugins: [
       vue({ template: { transformAssetUrls } }),
       vueI18n({}),
@@ -19,8 +19,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port,
       strictPort: !!env.APP_PORT,
-      // hmr suit le port du serveur : un websocket resté sur 3000 fait tenir deux
-      // ports à l'application et annule le décalage
+      // hmr follows the server port: a websocket left on 3000 would make the app hold
+      // two ports and defeat the port offset
       hmr: { port, protocol: 'ws' },
       warmup: { clientFiles: ['./src/main.ts', './src/**/*.vue'] }
     }

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Enregistre un flux GTFS-RT (VehiclePositions) pour pouvoir le rejouer ensuite.
+// Records a GTFS-RT feed (VehiclePositions) to replay it later.
 //
-// Sortie : <OUT_DIR>/{record.json, index.json, positions.jsonl, frames/NNN.bin, static/...}
-// - frames/ : réponses protobuf brutes, une par tick
-// - index.json : métadonnées de chaque frame (header, dernier timestamp véhicule, sha256...)
-// - positions.jsonl : positions décodées, directement exploitables par un animateur
-// - static/ : doc du jeu de métadonnées + docs/GeoJSON des jeux liés, pour un replay autonome
+// Output: <OUT_DIR>/{record.json, index.json, positions.jsonl, frames/NNN.bin, static/...}
+// - frames/: raw protobuf responses, one per tick
+// - index.json: metadata of each frame (header, last vehicle timestamp, sha256...)
+// - positions.jsonl: decoded positions, ready for an animation
+// - static/: metadata dataset document + related datasets documents / GeoJSON, for an offline replay
 //
-// Variables d'environnement : RT_URL, DURATION_MIN (20), INTERVAL_S (10), OUT_DIR,
+// Environment variables: RT_URL, DURATION_MIN (20), INTERVAL_S (10), OUT_DIR,
 // META_DATASET_ID, STATIC_API_BASE.
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -48,7 +48,7 @@ async function fetchWithRetry (url, attempts = 3) {
   throw lastError
 }
 
-/** Décode une frame protobuf : positions exploitables + compteurs. */
+/** Decodes a protobuf frame: usable positions + counters. */
 function decodeFrame (buffer) {
   const feed = transitRealtime.FeedMessage.decode(new Uint8Array(buffer))
   const positions = []
@@ -71,7 +71,7 @@ function decodeFrame (buffer) {
   return { feed, positions, tripUpdates }
 }
 
-/** Rôle d'un jeu lié d'après son schéma, comme l'app (les titres sont renommables). */
+/** Role of a related dataset from its schema, like the app (titles can be renamed). */
 function classify (doc) {
   const keys = new Set((doc.schema ?? []).map(field => field.key).filter(Boolean))
   if (keys.has('shape_id') || keys.has('route_short_name')) return 'shapes'
@@ -80,7 +80,7 @@ function classify (doc) {
   return null
 }
 
-/** Télécharge une fois le doc du jeu de métadonnées et ses jeux liés (docs + GeoJSON). */
+/** Downloads once the metadata dataset document and its related datasets (documents + GeoJSON). */
 async function cacheStatic () {
   let metaId = process.env.META_DATASET_ID
   if (!metaId && existsSync('.dev-config.json')) {
@@ -90,7 +90,7 @@ async function cacheStatic () {
     } catch {}
   }
   if (!metaId) {
-    log('static: aucun META_DATASET_ID ni .dev-config.json — cache ignoré')
+    log('static: no META_DATASET_ID nor .dev-config.json, cache skipped')
     return
   }
   try {
@@ -98,7 +98,7 @@ async function cacheStatic () {
     const datasetsDir = path.join(OUT_DIR, 'static', 'datasets')
     await mkdir(datasetsDir, { recursive: true })
     await writeFile(path.join(OUT_DIR, 'static', 'meta.json'), JSON.stringify(meta, null, 2))
-    log(`static: ${metaId} (jeu de métadonnées)`)
+    log(`static: ${metaId} (metadata dataset)`)
     for (const rel of meta.relatedDatasets ?? []) {
       if (!rel?.id) continue
       const doc = await (await fetchWithRetry(`${STATIC_API_BASE}/datasets/${rel.id}`)).json()
@@ -108,13 +108,13 @@ async function cacheStatic () {
         const href = doc.href ?? `${STATIC_API_BASE}/datasets/${rel.id}`
         const text = await (await fetchWithRetry(`${href}/lines?format=geojson&size=10000`)).text()
         await writeFile(path.join(datasetsDir, `${rel.id}.geojson`), text)
-        log(`static: ${rel.id} (${kind}) ${Math.round(text.length / 1024)} ko`)
+        log(`static: ${rel.id} (${kind}) ${Math.round(text.length / 1024)} kB`)
       } else {
-        log(`static: ${rel.id} (${kind ?? 'non classé'}) doc seule`)
+        log(`static: ${rel.id} (${kind ?? 'unclassified'}) document only`)
       }
     }
   } catch (err) {
-    log(`static: échec du cache (${err.message}) — le replay utilisera les données en ligne`)
+    log(`static: cache failed (${err.message}), the replay will use online data`)
   }
 }
 
@@ -139,7 +139,7 @@ async function main () {
   process.on('SIGTERM', () => { stopping = true })
 
   for (let number = 0; number < totalFrames && !shouldStop(); number++) {
-    // cadence fixée sur l'heure de départ : pas de dérive ni de rafale en fin de session
+    // ticks anchored on the start time: no drift and no burst at the end of the session
     const wait = startedAt + number * INTERVAL_S * 1000 - Date.now()
     if (wait > 0) await sleep(wait)
     const frameStart = Date.now()
@@ -166,21 +166,21 @@ async function main () {
         path.join(OUT_DIR, 'positions.jsonl'),
         JSON.stringify({ frame: number, vehicleMaxTimestamp: entry.vehicleMaxTimestamp, positions }) + '\n'
       )
-      log(`#${String(number).padStart(3, '0')} ${entry.bytes} o | positions ${positions.length} | header ${new Date(entry.headerTimestamp * 1000).toISOString()} | véhicules ${new Date(entry.vehicleMaxTimestamp * 1000).toISOString()}`)
+      log(`#${String(number).padStart(3, '0')} ${entry.bytes} B | positions ${positions.length} | header ${new Date(entry.headerTimestamp * 1000).toISOString()} | vehicles ${new Date(entry.vehicleMaxTimestamp * 1000).toISOString()}`)
     } catch (err) {
       entry.error = err.message
       entry.positions = 0
-      log(`#${String(number).padStart(3, '0')} ERREUR ${err.message}`)
+      log(`#${String(number).padStart(3, '0')} ERROR ${err.message}`)
     }
     frames.push(entry)
     await writeFile(path.join(OUT_DIR, 'index.json'), JSON.stringify({ ...run, frames }, null, 2))
   }
 
   const snapshots = new Set(frames.map(f => f.vehicleMaxTimestamp).filter(Boolean)).size
-  log(`terminé: ${frames.length} frames, ${snapshots} snapshots distincts dans ${OUT_DIR}`)
+  log(`done: ${frames.length} frames, ${snapshots} distinct snapshots in ${OUT_DIR}`)
 }
 
 main().catch((err) => {
-  console.error(new Date().toISOString(), 'échec du recorder', err)
+  console.error(new Date().toISOString(), 'recorder failed', err)
   process.exit(1)
 })

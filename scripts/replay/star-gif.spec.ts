@@ -4,10 +4,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 
-// Rejoue un enregistrement `scripts/record-rt.mjs` dans l'app et produit un GIF :
-// une frame toutes les ~20 s (dédoublonnage sur le dernier timestamp véhicule),
-// lue sur `gtfs-vehicles`, puis assemblée par ffmpeg.
-// Lancement : npx playwright test --config scripts/replay.config.ts
+// Replays a `scripts/record-rt.mjs` recording in the app and makes a GIF: one frame every
+// ~20 s (deduplicated on the last vehicle timestamp), read on `gtfs-vehicles`, assembled by ffmpeg.
+// Run: npx playwright test --config scripts/replay.config.ts
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const FALLBACK_COLOR = '#1976D2'
 
@@ -29,7 +28,7 @@ interface Position {
   bearing: number | null
 }
 
-/** Dernier enregistrement `recordings/star-*` terminé, ou RECORDING_DIR. */
+/** Last finished `recordings/star-*` recording, or RECORDING_DIR. */
 function latestRecording (): string {
   if (process.env.RECORDING_DIR) return path.resolve(process.env.RECORDING_DIR)
   const base = path.join(REPO_ROOT, 'recordings')
@@ -40,7 +39,7 @@ function latestRecording (): string {
   return path.join(base, dirs[dirs.length - 1])
 }
 
-/** Une frame par snapshot de positions : le flux republie les positions ~toutes les 20 s. */
+/** One frame per positions snapshot: the feed republishes positions about every 20 s. */
 function selectFrames (frames: FrameEntry[]): FrameEntry[] {
   const selected: FrameEntry[] = []
   let lastTimestamp = -Infinity
@@ -54,7 +53,7 @@ function selectFrames (frames: FrameEntry[]): FrameEntry[] {
   return selected
 }
 
-/** « 00AAFF » ou « #00AAFF » → couleur CSS, sinon null. */
+/** "00AAFF" or "#00AAFF" → CSS colour, else null. */
 function normalizeColor (raw?: string | null): string | null {
   const value = (raw ?? '').trim()
   if (!/^#?[0-9a-fA-F]{6}$/.test(value)) return null
@@ -67,7 +66,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
   const selected = selectFrames(index.frames as FrameEntry[])
   expect(selected.length).toBeGreaterThan(1)
 
-  /** Attend la fin du rendu (tuiles + couches) et deux frames d'animation. */
+  /** Waits for the end of rendering (tiles + layers) and two animation frames. */
   const waitForIdle = () => page.evaluate(() => new Promise<void>((resolve) => {
     const map = (window as any).__MAP__
     let done = false
@@ -80,14 +79,14 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
     setTimeout(finish, 2000)
   }))
 
-  // positions décodées, indexées par frame
+  // decoded positions, indexed by frame
   const positionsByFrame = new Map<number, Position[]>()
   for (const line of readFileSync(path.join(recording, 'positions.jsonl'), 'utf8').trim().split('\n')) {
     const entry = JSON.parse(line)
     positionsByFrame.set(entry.frame, entry.positions)
   }
 
-  // données statiques mises en cache par le recorder
+  // static data cached by the recorder
   const meta = JSON.parse(readFileSync(path.join(recording, 'static/meta.json'), 'utf8'))
   const docs = new Map<string, any>()
   const geojsons = new Map<string, any>()
@@ -100,7 +99,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
   }
   docs.set(meta.id, meta)
 
-  // couleurs et noms de lignes, comme buildRouteIndex de l'app
+  // route colours and names, like the app's buildRouteIndex
   const fallbackColor = JSON.parse(readFileSync(path.join(REPO_ROOT, '.dev-config.json'), 'utf8'))?.map?.fallbackColor ?? FALLBACK_COLOR
   const routeIndex = new Map<string, { name: string, color: string }>()
   for (const [id, doc] of docs) {
@@ -134,7 +133,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
     }))
   })
 
-  // bbox des positions pour cadrer la carte sur les véhicules enregistrés
+  // positions bbox, to frame the map on the recorded vehicles
   const bbox = { minLng: Infinity, minLat: Infinity, maxLng: -Infinity, maxLat: -Infinity }
   for (const frame of selected) {
     for (const p of positionsByFrame.get(frame.frame) ?? []) {
@@ -145,7 +144,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
     }
   }
 
-  // configuration rejouée : jeux statiques locaux, temps réel désactivé (on pilote la source)
+  // replayed configuration: local static datasets, realtime disabled (the source is driven here)
   const devConfig = JSON.parse(readFileSync(path.join(REPO_ROOT, '.dev-config.json'), 'utf8'))
   const datasets = [
     { id: meta.id, href: `/api/v1/datasets/${meta.id}`, title: meta.title },
@@ -159,7 +158,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
   const configuration = {
     datasets,
     realtime: { ...(devConfig.realtime ?? {}), enabled: false },
-    // véhicules agrandis pour l'animation (taille pensée pour la carte interactive)
+    // vehicles enlarged for the animation (default size is meant for the interactive map)
     map: { ...(devConfig.map ?? {}), vehicleSize: Number(process.env.GIF_VEHICLE_SIZE ?? 16) },
     panelPosition: devConfig.panelPosition ?? 'right',
     largePanel: devConfig.largePanel ?? false
@@ -178,8 +177,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
     body: `window.__PUBLIC_SITE_INFO = ${JSON.stringify(publicSiteInfo)};`
   }))
   await page.route('**/simple-directory/api/sites/_theme.css', route => route.fulfill({ contentType: 'text/css', body: '' }))
-  // le fond de carte de la config courante (klokantech-basic) vit sur le tileserver data-fair :
-  // on le proxifie côté serveur pour s'affranchir du CORS
+  // the basemap (klokantech-basic) lives on the data-fair tileserver: proxied server side to avoid CORS
   await page.route('**/tileserver/**', async (route) => {
     const url = new URL(route.request().url())
     try {
@@ -226,10 +224,10 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
   await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 30000 })
   await page.waitForFunction(() => !!(window as any).__MAP__?.getLayer('gtfs-vehicles-circle'), null, { timeout: 30000 })
   await expect(page.locator('.route-item').first()).toBeVisible({ timeout: 30000 })
-  // les véhicules passent au-dessus des arrêts pour rester lisibles en animation
+  // vehicles above stops, to stay readable in the animation
   await page.evaluate(() => (window as any).__MAP__.moveLayer('gtfs-vehicles-circle'))
 
-  // carte en plein cadre, sans panneau ni commandes, pour un GIF propre
+  // full-frame map, no panel nor controls, for a clean GIF
   await page.addStyleTag({
     content: `
       .navigation-side, .v-col:has(.navigation-side) { display: none !important; }
@@ -257,7 +255,7 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
     }, featureCollection(selected[i].frame))
     await waitForIdle()
     if (i === 0) {
-      // garde-fou : au moins un véhicule effectivement rendu sur la première frame
+      // safeguard: at least one vehicle actually rendered on the first frame
       const rendered = await page.evaluate(() =>
         (window as any).__MAP__.queryRenderedFeatures({ layers: ['gtfs-vehicles-circle'] }).length)
       expect(rendered).toBeGreaterThan(0)
@@ -277,5 +275,5 @@ test('génère un GIF animé depuis un enregistrement GTFS-RT', async ({ page })
   ], { stdio: 'inherit' })
 
   expect(existsSync(gifPath)).toBe(true)
-  console.log(`GIF généré : ${gifPath} (${selected.length} frames, 15 fps)`)
+  console.log(`GIF written: ${gifPath} (${selected.length} frames, 15 fps)`)
 })

@@ -3,8 +3,8 @@ import pluginVue from 'eslint-plugin-vue'
 import pluginVuetify from 'eslint-plugin-vuetify'
 import dfLibRecommended from '@data-fair/lib-utils/eslint/recommended.js'
 
-// le flat/base de eslint-plugin-vuetify enregistre déjà le plugin `vue`, et
-// ESLint 9.39+ refuse qu'un plugin soit redéfini — retirer `plugins` de la config de vue.
+// the flat/base config of eslint-plugin-vuetify already registers the `vue` plugin and
+// ESLint 9.39+ refuses a redefined plugin: drop `plugins` from the vue config.
 const vueFlatRecommended = pluginVue.configs['flat/recommended'].map(({ plugins, ...rest }) => rest)
 
 export default [

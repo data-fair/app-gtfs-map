@@ -35,13 +35,13 @@
     "@data-fair/lib-vue": "^1.31.1",
     "@data-fair/lib-vuetify": "^2.5.2",
     "@mdi/js": "^7.4.47",
-    "@vueuse/core": "^14.2.1",
-    "dayjs": "^1.11.20",
+    "@vueuse/core": ">=10",
+    "dayjs": "1",
     "gtfs-realtime-bindings": "^2.2.0",
     "maplibre-gl": "^6.11.2",
-    "ofetch": "^1.5.1",
-    "vue": "^3.5.33",
-    "vue-i18n": "^11.4.10",
+    "ofetch": "1",
+    "vue": "3",
+    "vue-i18n": "10 || 11",
     "vuetify": "^4.3.0"
   },
   "peerDependencies": {
@@ -52,8 +52,7 @@
     "dayjs": "1",
     "ofetch": "1",
     "vue": "3",
-    "vue-i18n": "10 || 11",
-    "vuetify": "4"
+    "vue-i18n": "10 || 11"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
