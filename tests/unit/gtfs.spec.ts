@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test'
 import type { FeatureCollection } from 'geojson'
 import {
   applyFallbackColor,
-  buildDeparturesUrl,
+  departuresQuery,
+  geoJsonQuery,
+  toGeoJsonLayer,
   buildRouteIndex,
   classifyDataset,
   colorsByShortName,
@@ -13,7 +15,6 @@ import {
   filterPlatformStops,
   filterStopsByRouteNames,
   findRealtimeUrl,
-  gtfsInsertBeforeId,
   hasRealtimeAttachment,
   isTruncated,
   linksBackTo,
@@ -30,14 +31,36 @@ test.describe('URLs API', () => {
     expect(datasetDocUrl('https://host/data-fair/api/v1/', 'abc')).toBe('https://host/data-fair/api/v1/datasets/abc')
   })
 
-  test('buildDeparturesUrl filtre l\'arrêt avec le suffixe _eq', () => {
-    const url = buildDeparturesUrl('https://host/api/v1/datasets/horaires', 'S1', new Date(2026, 8, 9, 10, 30))
-    expect(url).toContain('stop_id_eq=S1')
-    expect(url).not.toMatch(/[?&]stop_id=/)
-    expect(url).toContain('arrival_time_gte=10%3A30%3A00')
-    expect(url).toContain('sort=arrival_time&')
-    // l'API data-fair ne comprend que « -champ » pour le tri descendant, pas la syntaxe ES « champ:1 »
-    expect(url).not.toContain('arrival_time:1')
+  test('departuresQuery filtre l\'arrêt avec le suffixe _eq', () => {
+    const query = departuresQuery('S1', new Date(2026, 8, 9, 10, 30))
+    expect(query.stop_id_eq).toBe('S1')
+    expect(query).not.toHaveProperty('stop_id')
+    expect(query.arrival_time_gte).toBe('10:30:00')
+    // the data-fair API only understands "-field" for descending sort, not the ES "field:1" syntax
+    expect(query.sort).toBe('arrival_time')
+  })
+
+  test('finalizedAt transmis quand le jeu en a un, absent sinon', () => {
+    expect(departuresQuery('S1', new Date(), '2026-09-16T20:57:56.000Z').finalizedAt).toBe('2026-09-16T20:57:56.000Z')
+    expect(departuresQuery('S1', new Date())).not.toHaveProperty('finalizedAt')
+    expect(geoJsonQuery('2026-09-16T20:57:56.000Z')).toMatchObject({ format: 'geojson', finalizedAt: '2026-09-16T20:57:56.000Z' })
+    expect(geoJsonQuery()).not.toHaveProperty('finalizedAt')
+    expect(geoJsonQuery('')).not.toHaveProperty('finalizedAt')
+  })
+
+  test('toGeoJsonLayer écarte les objets sans géométrie et signale la troncature', () => {
+    const raw = {
+      type: 'FeatureCollection' as const,
+      total: 3,
+      features: [
+        { type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [0, 0] }, properties: {} },
+        { type: 'Feature' as const, geometry: null as any, properties: {} }
+      ]
+    }
+    const layer = toGeoJsonLayer(raw)
+    expect(layer.collection.features).toHaveLength(1)
+    expect(raw.features).toHaveLength(2)
+    expect(layer.truncated).toBe(true)
   })
 })
 
@@ -216,7 +239,7 @@ test.describe('couleurs GTFS', () => {
     const colors = colorsByShortName(buildRouteIndex(fc, '#1976D2'))
     expect(colors.get('1')).toBe('#FF8800')
     expect(colors.get('2')).toBe('#33AA33')
-    // garde-fou : un nom court vide n'entre pas dans l'index
+    // guard: an empty short name is not indexed
     const withEmpty = colorsByShortName(new Map([
       ['C', { routeId: 'C', shortName: '', longName: '', color: '#FFFFFF' }]
     ]))
@@ -235,7 +258,7 @@ test.describe('couleurs GTFS', () => {
     }
     const filtered = filterPlatformStops(fc)
     expect(filtered?.features.map(f => f.properties!.stop_id)).toEqual(['S1', 'S2', 'S3'])
-    // la collection d'origine n'est pas modifiée
+    // the original collection is not mutated
     expect(fc.features).toHaveLength(4)
   })
 
@@ -264,7 +287,7 @@ test.describe('filtre de lignes', () => {
   test('resolveAllowedRouteIds : inclusion et exclusion', () => {
     expect([...resolveAllowedRouteIds('include', ['A', 'B'], allIds)!]).toEqual(['A', 'B'])
     expect([...resolveAllowedRouteIds('exclude', ['B'], allIds)!]).toEqual(['A', 'C'])
-    // identifiants numériques : la comparaison passe par String()
+    // numeric ids: comparison goes through String()
     expect([...resolveAllowedRouteIds('include', [1 as any], [1 as any])!]).toEqual(['1'])
     expect([...resolveAllowedRouteIds('exclude', ['1'], [1 as any, 2 as any])!]).toEqual(['2'])
   })
@@ -280,7 +303,7 @@ test.describe('filtre de lignes', () => {
     }
     const filtered = filterFeaturesByRoutes(fc, 'route_id', new Set(['A']))
     expect(filtered?.features.map(f => f.properties!.route_id)).toEqual(['A'])
-    // collection d'origine intacte, et pas de filtre = même objet
+    // original collection untouched, and no filter = same object
     expect(fc.features).toHaveLength(3)
     expect(filterFeaturesByRoutes(fc, 'route_id', null)).toBe(fc)
   })
@@ -302,7 +325,7 @@ test.describe('filtre de lignes', () => {
 })
 
 test.describe('prochains passages', () => {
-  // mercredi 9 septembre 2026, 10 h 30
+  // Wednesday, September 9 2026, 10:30
   const now = new Date(2026, 8, 9, 10, 30, 0)
 
   test('parseGtfsTime gère les heures au-delà de 24', () => {
@@ -331,7 +354,7 @@ test.describe('prochains passages', () => {
     ]
     expect(selectDepartures(rows, now, new Set(['1'])).map(d => d.routeName)).toEqual(['1'])
     expect(selectDepartures(rows, now, null)).toHaveLength(3)
-    // un passage sans nom de ligne est masqué par un filtre actif
+    // a departure without route name is hidden by an active filter
     expect(selectDepartures(rows, now, new Set(['1'])).every(d => d.routeName === '1')).toBe(true)
   })
 
@@ -384,42 +407,5 @@ test.describe('normalizeStopRoutes', () => {
     expect(normalizeStopRoutes(undefined)).toEqual([])
     expect(normalizeStopRoutes(null)).toEqual([])
     expect(normalizeStopRoutes(42)).toEqual([])
-  })
-})
-
-test.describe('gtfsInsertBeforeId', () => {
-  // ordre condensé du style klokantech-basic : les routes viennent après un premier label (housenumber)
-  const klokantech = [
-    { id: 'background', type: 'background' },
-    { id: 'water', type: 'fill' },
-    { id: 'waterway', type: 'line' },
-    { id: 'building', type: 'fill' },
-    { id: 'housenumber', type: 'symbol' },
-    { id: 'road_path', type: 'line' },
-    { id: 'road_minor', type: 'line' },
-    { id: 'road_major_motorway', type: 'line' },
-    { id: 'railway', type: 'line' },
-    { id: 'bridge_major', type: 'line' },
-    { id: 'admin_country', type: 'line' },
-    { id: 'poi_label', type: 'symbol' },
-    { id: 'road_major_label', type: 'symbol' },
-    { id: 'place_label_city', type: 'symbol' }
-  ]
-
-  test('insère au-dessus des routes et ponts, sous les labels du fond de carte', () => {
-    expect(gtfsInsertBeforeId(klokantech)).toBe('poi_label')
-  })
-
-  test('ignore un label qui précède les routes (bug historique : couches sous les routes)', () => {
-    // housenumber précède road_* : l'ancien code le choisissait et plaçait les données sous les routes
-    expect(gtfsInsertBeforeId(klokantech)).not.toBe('housenumber')
-  })
-
-  test('style sans route ni label : pas de point d\'insertion (couches au sommet)', () => {
-    expect(gtfsInsertBeforeId([{ id: 'background', type: 'background' }])).toBeUndefined()
-  })
-
-  test('style sans label : pas de point d\'insertion', () => {
-    expect(gtfsInsertBeforeId([{ id: 'background', type: 'background' }, { id: 'road', type: 'line' }])).toBeUndefined()
   })
 })

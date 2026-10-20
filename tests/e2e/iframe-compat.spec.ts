@@ -1,15 +1,14 @@
-// Compatibilité d-frame — le shim v-iframe-compat injecté par DataFair quand
-// l'app est embarquée (portail, dashboard) lit window.vIframeOptions pour
-// appliquer les updateSrc du parent sans recharger l'iframe.
-import { expect } from '@playwright/test'
-import { mockApp, test } from './fixtures'
+// d-frame compatibility: the v-iframe-compat shim DataFair injects when the
+// app is embedded (portal, dashboard) reads window.vIframeOptions to apply
+// parent updateSrc calls without reloading the iframe.
+import { expect, mockApp, test } from './fixtures'
 
 test.describe('compatibilité d-frame (shim v-iframe-compat)', () => {
   test('expose reactiveSearchParams au shim dès l\'évaluation du module', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
-    // posé au niveau module de main.ts, avant createApp : présent dès le chargement
+    // set at main.ts module level, before createApp: present from page load
     const exposed = await page.evaluate(() => {
       const opts = window.vIframeOptions
       return !!opts && typeof opts.reactiveParams === 'object' && opts.reactiveParams !== null
@@ -21,8 +20,8 @@ test.describe('compatibilité d-frame (shim v-iframe-compat)', () => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
-    // écriture telle que la ferait le shim sur updateSrc : c'est bien le singleton
-    // réactif de la lib, donc le paramètre est reporté dans l'URL
+    // write as the shim does on updateSrc: it is the lib's reactive singleton,
+    // so the parameter is reflected in the URL
     await page.evaluate(() => {
       window.vIframeOptions!.reactiveParams.route = 'B'
     })
@@ -30,4 +29,31 @@ test.describe('compatibilité d-frame (shim v-iframe-compat)', () => {
       new URLSearchParams(window.location.search).get('route')
     )).toBe('B')
   })
+})
+
+// d-frame first lays the iframe out at the width of its parent and 0 px high, then gives it its
+// size: the map waits for that size, so it frames the network and folds its credit as on a phone
+test('a frame laid out wide and 0 px high first: the map frames the network at its final size', async ({ page }) => {
+  await mockApp(page, { withoutRealtime: true })
+  await page.route('**/frame-test.html', route => route.fulfill({
+    contentType: 'text/html',
+    body: '<!doctype html><body style="margin:0"><iframe id="f" src="./" style="border:0;display:block;width:925px;height:0"></iframe></body>'
+  }))
+  await page.goto('/frame-test.html')
+  const frame = page.frameLocator('#f')
+  await expect(frame.locator('#map-panel-drawer')).toBeAttached({ timeout: 15000 })
+  await page.evaluate(() => {
+    const f = document.getElementById('f')!
+    f.style.width = '400px'
+    f.style.height = '267px'
+  })
+  const attribution = frame.locator('.maplibregl-ctrl-attrib')
+  await expect(attribution).toHaveClass(/maplibregl-compact/, { timeout: 15000 })
+  await expect(attribution).not.toHaveClass(/maplibregl-compact-show/)
+  const app = page.frames().find(f => f !== page.mainFrame())!
+  await expect.poll(() => app.evaluate(() => {
+    const map = window.__MAP__!
+    const stops = (map.getSource('gtfs-stops') as any)?.serialize().data?.features ?? []
+    return stops.length > 0 && stops.every((s: any) => map.getBounds().contains(s.geometry.coordinates))
+  }), { timeout: 15000 }).toBe(true)
 })

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
 import { decodeFeed, feedToVehicles, filterVehiclesByRoutes, type VehicleCollection } from '../../src/composables/use-vehicles'
 
-// le paquet est CommonJS : import par défaut requis hors bundler
+// CommonJS package: default import required outside the bundler
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
 
 const fallbackColor = '#1976D2'
@@ -16,7 +16,7 @@ const buildFeed = (entities: any[]): ArrayBuffer => {
     header: { gtfsRealtimeVersion: '2.0', incrementality: 0 },
     entity: entities
   })
-  // finish() renvoie un Buffer Node (avec pool mémoire) : copie exacte obligatoire
+  // finish() returns a pooled Node Buffer: an exact copy is required
   const bytes = transitRealtime.FeedMessage.encode(message).finish()
   const exact = new Uint8Array(bytes.byteLength)
   exact.set(bytes)
@@ -47,7 +47,7 @@ test('décode les positions de véhicules et les enrichit des infos de ligne', a
   expect(result.features).toHaveLength(2)
 
   const [first, second] = result.features
-  // protobuf stocke lat/lng en float32 : comparer avec tolérance
+  // protobuf stores lat/lng as float32: compare with tolerance
   expect(first.geometry.type).toBe('Point')
   expect(first.geometry.coordinates[0]).toBeCloseTo(-1.5, 5)
   expect(first.geometry.coordinates[1]).toBeCloseTo(47.1, 5)
@@ -64,7 +64,7 @@ test('décode les positions de véhicules et les enrichit des infos de ligne', a
 
   expect(second.properties.routeName).toBe('ROUTE-UNKNOWN')
   expect(second.properties.color).toBe(fallbackColor)
-  // protobufjs décode l'absence de vitesse en 0 (défaut scalaire)
+  // protobufjs decodes a missing speed as 0 (scalar default)
   expect(second.properties.speed).toBe(0)
 })
 
@@ -133,9 +133,9 @@ test('filterVehiclesByRoutes restreint aux lignes autorisées', () => {
 
   const filtered = filterVehiclesByRoutes(collection, new Set(['ROUTE-A']))
   expect(filtered.features.map(f => f.properties.routeId)).toEqual(['ROUTE-A'])
-  // collection d'origine intacte
+  // original collection untouched
   expect(collection.features).toHaveLength(2)
 
-  // sans filtre (null), la collection est renvoyée telle quelle
+  // without filter (null), the collection is returned as is
   expect(filterVehiclesByRoutes(collection, null)).toBe(collection)
 })

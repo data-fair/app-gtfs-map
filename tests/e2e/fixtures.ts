@@ -1,21 +1,40 @@
 /// <reference types="node" />
-import { expect, test as base } from '@playwright/test'
+import { test as base, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
 
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
 
-// Les handlers de route de mockApp peuvent être encore en vol à la fin d'un test
-// (requêtes de l'app non attendues par le test) : purge silencieuse en teardown,
-// sinon Playwright marque le test en échec (« Test ended » while running route callback).
-export const test = base.extend({
+// mockApp route handlers may still be in flight when a test ends (app requests
+// the test does not await): silently purged on teardown, otherwise Playwright
+// fails the test ("Test ended" while running route callback).
+export const test = base.extend<{ consoleGuard: void, expectedConsole: string[] }>({
   page: async ({ page }, use) => {
     await use(page)
     await page.unrouteAll({ behavior: 'ignoreErrors' })
-  }
+  },
+  // messages a test provokes on purpose, named one by one: test.use({ expectedConsole: ['status of 500'] })
+  // GPU stall due to ReadPixels: SwiftShader performance message as soon as the maplibre canvas draws
+  expectedConsole: [['GPU stall due to ReadPixels'], { option: true }],
+  consoleGuard: [async ({ page, expectedConsole }, use) => {
+    const messages: string[] = []
+    page.on('console', (msg) => {
+      if (msg.type() !== 'error' && msg.type() !== 'warning') return
+      if (expectedConsole.some(text => msg.text().includes(text))) return
+      messages.push(`[${msg.type()}] ${msg.text()}`)
+    })
+    page.on('pageerror', (err) => {
+      // harness artifact: Vite serves index.html raw, the inline `window.APPLICATION=%APPLICATION%` fails to parse
+      if (err.message === "Unexpected token '%'") return
+      messages.push(`[pageerror] ${err.message}`)
+    })
+    await use()
+    expect(messages, 'console must stay clean').toEqual([])
+  }, { auto: true }]
 })
+export { expect }
 
-/** Info de site minimale lue par createSession sans requête (script _public.js). */
+/** Minimal site info read by createSession without a request (_public.js script). */
 const PUBLIC_SITE_INFO = {
   main: 'http://localhost',
   isAccountMain: true,
@@ -38,10 +57,9 @@ const PUBLIC_SITE_INFO = {
   }
 }
 
-/** Style de fond minimal : le dev stack n'a pas de tileserver (comme chez data-fair). */
+/** Minimal basemap style: the dev stack has no tileserver (same as data-fair). */
 const MINIMAL_STYLE = {
   version: 8,
-  glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
   sources: {},
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#eeeeee' } }
@@ -78,7 +96,7 @@ export const STOPS_GEOJSON = {
       properties: { stop_id: 'S2', stop_name: 'Mairie', routes: ['1'], location_type: '0' }
     },
     {
-      // station parente de S1/S2 : doit être filtrée, jamais rendue sur la carte
+      // parent station of S1/S2: must be filtered out, never rendered on the map
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [-1.53, 47.21] },
       properties: { stop_id: 'SP', stop_name: 'Pôle Central', location_type: '1' }
@@ -88,7 +106,7 @@ export const STOPS_GEOJSON = {
 
 export type RtFeedKind = 'positions' | 'tripUpdate' | 'empty'
 
-/** Encode un flux GTFS-RT minimal : positions de véhicules (défaut), TripUpdate seul ou flux vide. */
+/** Encodes a minimal GTFS-RT feed: vehicle positions (default), TripUpdate only, or empty feed. */
 export function buildRtFeed (
   vehicles: Array<{ id: string, routeId: string, lat: number, lng: number }>,
   kind: RtFeedKind = 'positions'
@@ -134,7 +152,7 @@ const DOCS: Record<string, any> = {
       {
         type: 'remoteFile',
         name: 'gtfs-rt.protobuf',
-        // lien public calculé par data-fair, proxifié vers l'URL réelle du flux
+        // public link computed by data-fair, proxied to the real feed URL
         url: '/api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf'
       }
     ]
@@ -163,19 +181,19 @@ const DOCS: Record<string, any> = {
 }
 
 export interface MockOptions {
-  /** contenu de configuration.datasets — par défaut le jeu de métadonnées avec famille complète */
+  /** configuration.datasets content, defaults to the metadata dataset with a full family */
   datasets?: any[]
-  /** nombre de véhicules dans le flux mocké (défaut 2) */
+  /** number of vehicles in the mocked feed (default 2) */
   vehicles?: number
-  /** type de flux temps réel mocké (défaut : positions de véhicules) */
+  /** mocked realtime feed kind (default: vehicle positions) */
   feedKind?: RtFeedKind
-  /** retire la pièce jointe distante du flux temps réel */
+  /** removes the realtime feed remote attachment */
   withoutRealtime?: boolean
-  /** retire les jeux liés du jeu de métadonnées */
+  /** removes the related datasets of the metadata dataset */
   withoutRelated?: boolean
-  /** retarde la réponse du jeu « tracés » (ms), pour vérifier l'ordre capture/rendu */
+  /** delays the shapes dataset response (ms), to check capture/render order */
   shapesDelayMs?: number
-  /** champs de configuration additionnels (panelPosition, largePanel...) */
+  /** additional configuration fields (panelPosition, largePanel...) */
   config?: Record<string, unknown>
 }
 
@@ -213,14 +231,25 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
     }
   })
 
-  await page.route('**/tileserver/styles/klokantech-basic/style.json*', route => route.fulfill({ json: MINIMAL_STYLE }))
+  // glyphs on the mocked origin: an empty glyph range is a valid answer
+  await page.route('**/tileserver/styles/klokantech-basic/style.json*', route => route.fulfill({
+    json: { ...MINIMAL_STYLE, glyphs: new URL(route.request().url()).origin + '/tileserver/fonts/{fontstack}/{range}.pbf' }
+  }))
+  await page.route('**/tileserver/fonts/**', route => route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }))
+  await page.route('**/api/v1/datasets/gtfs-stoptimes/lines*', route => route.fulfill({ json: { total: 0, results: [] } }))
   await page.route('**/api/v1/datasets/gtfs-meta', route => route.fulfill({ json: metaDoc }))
+  // related datasets are read in one list request (?ids=)
+  await page.route(/\/api\/v1\/datasets\?/, route => {
+    const ids = new URL(route.request().url()).searchParams.get('ids')?.split(',') ?? []
+    const results = ids.map(id => DOCS[id]).filter(Boolean)
+    return route.fulfill({ json: { count: results.length, results } })
+  })
   await page.route('**/api/v1/datasets/gtfs-shapes', route => route.fulfill({ json: DOCS['gtfs-shapes'] }))
   await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: DOCS['gtfs-stops'] }))
   await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: DOCS['gtfs-stoptimes'] }))
   await page.route('**/api/v1/datasets/gtfs-shapes/lines*', async route => {
-    // __shapesAt n'est lu que pour contrôler l'ordre capture/rendu : ne l'évaluer
-    // que dans ce cas, sinon l'evaluate peut s'exécuter après la fin du test
+    // __shapesAt is only read to check capture/render order: evaluate it only
+    // in that case, otherwise the evaluate may run after the test has ended
     if (options.shapesDelayMs) {
       await new Promise(resolve => setTimeout(resolve, options.shapesDelayMs))
       await page.evaluate(() => { (window as any).__shapesAt = Date.now() })
