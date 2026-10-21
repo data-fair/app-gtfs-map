@@ -10,6 +10,7 @@ import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-glob
 import { gtfsInsertBeforeId, normalizeStopRoutes, type RouteInfo } from '@/composables/gtfs.js'
 import type { Selection } from '@/composables/selection.js'
 import type { VehicleProperties } from '@/composables/use-vehicles.js'
+import { applyInitialView, readViewParams, resolveInitialView, writeViewParams } from '@/utils/initial-view'
 
 maplibregl.setWorkerUrl(workerUrl)
 
@@ -56,27 +57,16 @@ const emptyFc = (): FeatureCollection => ({ type: 'FeatureCollection', features:
 /* Navigation persistée dans l'URL (lng, lat, zoom)                    */
 /* ------------------------------------------------------------------ */
 
-function urlNumber (key: string): number | null {
-  const v = Number(reactiveSearchParams[key])
-  return Number.isFinite(v) ? v : null
-}
-
 // vue complète lue une seule fois au montage : centre/zoom initiaux de la carte
-const urlView: { center: [number, number], zoom: number } | null = (() => {
-  const lng = urlNumber('lng')
-  const lat = urlNumber('lat')
-  const zoom = urlNumber('zoom')
-  if (lng === null || lat === null || zoom === null) return null
-  return { center: [lng, lat], zoom }
-})()
+const urlView = readViewParams(reactiveSearchParams)
 
+// the view shown before the first fit (a resize in a background tab) must never reach a shared link
+let viewSettled = !!urlView
 // debounce : un geste continu (molette, pincement) émet de nombreux moveend, et
 // chaque écriture d'URL envoie un stateChange au parent (portail, dashboard)
 const persistView = useDebounceFn(() => {
-  if (!map) return
-  reactiveSearchParams.lng = map.getCenter().lng.toFixed(6)
-  reactiveSearchParams.lat = map.getCenter().lat.toFixed(6)
-  reactiveSearchParams.zoom = map.getZoom().toFixed(2)
+  if (!map || !viewSettled) return
+  writeViewParams(reactiveSearchParams, map.getCenter(), map.getZoom())
 }, 250)
 
 // expressions maplibre : tableaux typés « large » pour contourner les unions d'expressions
@@ -233,7 +223,10 @@ function applyHighlight (fit = false) {
   // lien qui porte la ligne sans position. Une vue URL complète prime toujours.
   if (fit && props.highlightRouteId) {
     const bounds = routeBounds(props.highlightRouteId)
-    if (bounds) map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 })
+    if (bounds) {
+      map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 })
+      viewSettled = true
+    }
   }
 }
 
@@ -273,6 +266,12 @@ function fitNetwork () {
     for (const c of featureCoords(feature.geometry)) bounds.extend(c as [number, number])
   }
   map.fitBounds(bounds, { padding: 30, maxZoom: 14, duration: 0 })
+  viewSettled = true
+}
+
+// a tab opened in the background may skip the first fit: do it when the tab shows up
+function onVisible () {
+  if (!document.hidden && !viewSettled && loaded) fitNetwork()
 }
 
 /* ------------------------------------------------------------------ */
@@ -323,15 +322,21 @@ onMounted(() => {
   map = new maplibregl.Map({
     container: container.value,
     style: props.styleUrl,
-    ...(urlView ?? {}),
     attributionControl: false,
     zoomLevelsToOverscale: undefined
   })
+  // the shared link, else metropolitan France until the network is fitted
+  applyInitialView(map, resolveInitialView({ params: reactiveSearchParams }))
+  document.addEventListener('visibilitychange', onVisible)
   if (import.meta.env.DEV) window.__MAP__ = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
   // toute fin de déplacement (pan, zoom, fitBounds) est reportée dans l'URL
-  map.on('moveend', persistView)
+  map.on('moveend', (e) => {
+    // a user move settles the view even when nothing could be fitted (unknown route, empty network)
+    if (e.originalEvent) viewSettled = true
+    persistView()
+  })
   // style.load se déclenche au chargement initial et après chaque setStyle (changement de fond)
   map.on('style.load', () => {
     loaded = false
@@ -341,6 +346,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisible)
   // persiste une éventuelle vue en attente avant de détruire la carte
   persistView.flush()
   map?.remove()
