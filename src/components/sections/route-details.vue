@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import RouteBadge from '../route-badge.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   routeId: string
@@ -14,28 +17,22 @@ const subtitle = computed(() => props.longName || props.routeId)
 
 <template>
   <div class="gtfs-details">
-    <div class="details-header">
+    <div class="d-flex ga-2 align-center mb-1">
       <RouteBadge
         :route-name="shortName"
         :color="color"
       />
-      <strong>Ligne {{ shortName }}</strong>
+      <strong>{{ t('route', { name: shortName }) }}</strong>
     </div>
-    <div class="details-line">
+    <div class="text-body-medium text-medium-emphasis">
       {{ subtitle }}
     </div>
   </div>
 </template>
 
-<style scoped>
-.details-header {
-  display: flex;
-  gap: 0.5em;
-  align-items: center;
-  margin-bottom: 0.25em;
-}
-.details-line {
-  color: #555;
-  font-size: 0.85em;
-}
-</style>
+<i18n lang="yaml">
+fr:
+  route: Ligne {name}
+en:
+  route: Route {name}
+</i18n>

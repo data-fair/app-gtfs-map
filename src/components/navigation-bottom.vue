@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { mdiMapLegend, mdiSelectionMarker } from '@mdi/js'
 import { useDisplay } from 'vuetify'
 import type { FeatureCollection, Point } from 'geojson'
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   (e: 'select-route', routeId: string | null): void
 }>()
 
+const { t } = useI18n()
 const { height } = useDisplay()
 
 const SELECTION_PANEL = 0
@@ -44,9 +46,8 @@ function toggleSheet (target: number) {
   sheet.value = open
 }
 
-// la sélection ouvre la feuille sur le détail (y compris restaurée de l'URL au
-// montage) ; quand elle est vidée, on revient à la légende (l'onglet Sélection
-// est alors désactivé)
+// a selection opens the sheet on its details (restored from the URL on mount too);
+// once cleared, back to the legend (the Selection tab then shows its hint)
 watch(() => props.selection, (value) => {
   if (value) {
     tab.value = SELECTION_PANEL
@@ -94,18 +95,17 @@ watch(() => props.selection, (value) => {
     <v-bottom-navigation
       v-model="tab"
       style="z-index:3000"
-      aria-label="Navigation principale"
+      :aria-label="t('navigation')"
       :color="sheet ? 'primary' : ''"
     >
       <v-btn
         :value="SELECTION_PANEL"
-        :disabled="!selection"
         style="min-width:120px"
         size="small"
         class="pa-0"
         @click="toggleSheet(SELECTION_PANEL)"
       >
-        <span>Sélection</span><v-icon :icon="mdiSelectionMarker" />
+        <span>{{ t('selection') }}</span><v-icon :icon="mdiSelectionMarker" />
       </v-btn>
       <v-btn
         :value="LEGEND_PANEL"
@@ -114,8 +114,19 @@ watch(() => props.selection, (value) => {
         class="pa-0"
         @click="toggleSheet(LEGEND_PANEL)"
       >
-        <span>Légende</span><v-icon :icon="mdiMapLegend" />
+        <span>{{ t('legend') }}</span><v-icon :icon="mdiMapLegend" />
       </v-btn>
     </v-bottom-navigation>
   </div>
 </template>
+
+<i18n lang="yaml">
+fr:
+  selection: Sélection
+  legend: Légende
+  navigation: Navigation principale
+en:
+  selection: Selection
+  legend: Legend
+  navigation: Main navigation
+</i18n>

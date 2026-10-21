@@ -5,11 +5,13 @@ import * as maplibregl from 'maplibre-gl'
 import type { GeoJSONSource, LngLatBoundsLike, MapGeoJSONFeature, StyleSpecification } from 'maplibre-gl'
 import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import '@/styles/map-controls.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import { gtfsInsertBeforeId, normalizeStopRoutes, type RouteInfo } from '@/composables/gtfs.js'
 import type { Selection } from '@/composables/selection.js'
 import type { VehicleProperties } from '@/composables/use-vehicles.js'
+import { FoldedAttributionControl } from '@/utils/folded-attribution'
 import { applyInitialView, readViewParams, resolveInitialView, writeViewParams } from '@/utils/initial-view'
 
 maplibregl.setWorkerUrl(workerUrl)
@@ -330,7 +332,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisible)
   if (import.meta.env.DEV) window.__MAP__ = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
+  map.addControl(new FoldedAttributionControl({ compact: true }), 'bottom-right')
   // toute fin de déplacement (pan, zoom, fitBounds) est reportée dans l'URL
   map.on('moveend', (e) => {
     // a user move settles the view even when nothing could be fitted (unknown route, empty network)

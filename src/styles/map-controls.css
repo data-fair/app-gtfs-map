@@ -1,0 +1,109 @@
+/*
+ * MapLibre controls on the Vuetify theme. Import after maplibre-gl.css. Unlayered on purpose:
+ * maplibre-gl.css is unlayered too and would beat any @layer rule.
+ */
+/* maplibre-gl.css sets Helvetica on the whole map: popups and controls take the app font (theme of the site) */
+.maplibregl-map {
+  font-family: inherit;
+}
+.maplibregl-map .maplibregl-ctrl-group {
+  background: rgb(var(--v-theme-surface));
+}
+.maplibregl-map .maplibregl-ctrl-group button + button {
+  border-top-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.maplibregl-map .maplibregl-ctrl-group button:not(:disabled):hover {
+  background-color: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
+}
+/* keyboard focus like a Vuetify v-btn (focus overlay) instead of maplibre's blue ring, which shows on
+   mouse clicks too and turned orange under the dark-theme invert of the credit button */
+.maplibregl-map .maplibregl-ctrl-group button:focus,
+.maplibregl-map .maplibregl-ctrl-attrib-button:focus {
+  box-shadow: none;
+}
+.maplibregl-map .maplibregl-ctrl-group button:focus-visible,
+.maplibregl-map .maplibregl-ctrl-attrib:has(> .maplibregl-ctrl-attrib-button:focus-visible) {
+  /* an image layer: the credit keeps its own background colour under the overlay */
+  background-image: linear-gradient(rgba(var(--v-theme-on-surface), var(--v-focus-opacity)) 0 0);
+}
+.maplibregl-map .maplibregl-ctrl-attrib,
+.maplibregl-map .maplibregl-ctrl-scale {
+  background: rgba(var(--v-theme-surface), 0.8);
+  color: rgb(var(--v-theme-on-surface));
+}
+.maplibregl-map .maplibregl-ctrl-scale {
+  border-color: rgb(var(--v-theme-on-surface));
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
+  color: inherit;
+}
+/* maplibre's folded 24 px circle is content-box: border-box (unfolded wrapping, below) squeezed it to 24 × 20 */
+.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
+  box-sizing: content-box;
+}
+/* the unfolded credit wraps inside the map, clear of a drawer laid over it (--map-panel-cover, map-panel.vue) */
+.maplibregl-map {
+  container-type: inline-size;
+}
+.maplibregl-map .maplibregl-ctrl-attrib {
+  box-sizing: border-box;
+  max-width: calc(100cqi - var(--map-panel-cover, 0px) - 20px);
+}
+
+.maplibregl-map .maplibregl-popup-content {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface));
+}
+.maplibregl-map .maplibregl-popup-close-button {
+  color: inherit;
+}
+/* the tip is a CSS triangle: only the border facing the content is coloured */
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: rgb(var(--v-theme-surface));
+}
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: rgb(var(--v-theme-surface));
+}
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: rgb(var(--v-theme-surface));
+}
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: rgb(var(--v-theme-surface));
+}
+
+/* built-in icons are dark background images; the four session themes are default, dark, hc, hc-dark */
+:is(.v-theme--dark, .v-theme--hc-dark) .maplibregl-map .maplibregl-ctrl-icon,
+:is(.v-theme--dark, .v-theme--hc-dark) .maplibregl-map .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
+/* active states (globe, terrain, geolocation) in the theme primary instead of maplibre's blue: the
+   icon becomes a mask over a primary background, never inverted on dark themes */
+.maplibregl-map .maplibregl-ctrl button:is(.maplibregl-ctrl-globe-enabled, .maplibregl-ctrl-terrain-enabled, .maplibregl-ctrl-geolocate-active, .maplibregl-ctrl-geolocate-background) .maplibregl-ctrl-icon {
+  background: rgb(var(--v-theme-primary));
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  filter: none;
+}
+.maplibregl-map .maplibregl-ctrl button.maplibregl-ctrl-globe-enabled .maplibregl-ctrl-icon {
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2222%22%20height%3D%2222%22%20fill%3D%22none%22%20stroke%3D%22%2333b5e5%22%20viewBox%3D%220%200%2022%2022%22%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%2211%22%20r%3D%228.5%22%2F%3E%3Cpath%20d%3D%22M17.5%2011c0%204.819-3.02%208.5-6.5%208.5S4.5%2015.819%204.5%2011%207.52%202.5%2011%202.5s6.5%203.681%206.5%208.5Z%22%2F%3E%3Cpath%20d%3D%22M13.5%2011c0%202.447-.331%204.64-.853%206.206-.262.785-.562%201.384-.872%201.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831%2015.64%208.5%2013.446%208.5%2011s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872%201.777.522%201.565.853%203.76.853%206.206Z%22%2F%3E%3Cpath%20d%3D%22M11%207.5c-1.909%200-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3%201.3%200%200%201-.224-.138q.07-.058.224-.138c.299-.151.763-.302%201.379-.434C7.378%205.666%209.091%205.5%2011%205.5s3.622.166%204.845.428c.616.132%201.08.283%201.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm0%209c-1.909%200-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3%201.3%200%200%201-.224-.138%201.3%201.3%200%200%201%20.224-.138c.299-.151.763-.302%201.379-.434C7.378%2014.666%209.091%2014.5%2011%2014.5s3.622.166%204.845.428c.616.132%201.08.283%201.379.434.105.053.177.1.224.138a1.3%201.3%200%200%201-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm0-4c-2.46%200-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5%201.5%200%200%201-.39-.272.3.3%200%200%201-.047-.064.3.3%200%200%201%20.048-.064c.066-.073.189-.167.389-.272.399-.21%201.009-.413%201.805-.59C6.328%209.722%208.54%209.5%2011%209.5s4.672.222%206.256.574c.795.177%201.405.38%201.804.59.2.105.323.2.39.272a.3.3%200%200%201%20.047.064.3.3%200%200%201-.048.064%201.4%201.4%200%200%201-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0%20.018v.002zm17.002.002v-.002zm0-.018v-.002z%22%2F%3E%3C%2Fsvg%3E");
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2222%22%20height%3D%2222%22%20fill%3D%22none%22%20stroke%3D%22%2333b5e5%22%20viewBox%3D%220%200%2022%2022%22%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%2211%22%20r%3D%228.5%22%2F%3E%3Cpath%20d%3D%22M17.5%2011c0%204.819-3.02%208.5-6.5%208.5S4.5%2015.819%204.5%2011%207.52%202.5%2011%202.5s6.5%203.681%206.5%208.5Z%22%2F%3E%3Cpath%20d%3D%22M13.5%2011c0%202.447-.331%204.64-.853%206.206-.262.785-.562%201.384-.872%201.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831%2015.64%208.5%2013.446%208.5%2011s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872%201.777.522%201.565.853%203.76.853%206.206Z%22%2F%3E%3Cpath%20d%3D%22M11%207.5c-1.909%200-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3%201.3%200%200%201-.224-.138q.07-.058.224-.138c.299-.151.763-.302%201.379-.434C7.378%205.666%209.091%205.5%2011%205.5s3.622.166%204.845.428c.616.132%201.08.283%201.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm0%209c-1.909%200-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3%201.3%200%200%201-.224-.138%201.3%201.3%200%200%201%20.224-.138c.299-.151.763-.302%201.379-.434C7.378%2014.666%209.091%2014.5%2011%2014.5s3.622.166%204.845.428c.616.132%201.08.283%201.379.434.105.053.177.1.224.138a1.3%201.3%200%200%201-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm0-4c-2.46%200-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5%201.5%200%200%201-.39-.272.3.3%200%200%201-.047-.064.3.3%200%200%201%20.048-.064c.066-.073.189-.167.389-.272.399-.21%201.009-.413%201.805-.59C6.328%209.722%208.54%209.5%2011%209.5s4.672.222%206.256.574c.795.177%201.405.38%201.804.59.2.105.323.2.39.272a.3.3%200%200%201%20.047.064.3.3%200%200%201-.048.064%201.4%201.4%200%200%201-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0%20.018v.002zm17.002.002v-.002zm0-.018v-.002z%22%2F%3E%3C%2Fsvg%3E");
+}
+.maplibregl-map .maplibregl-ctrl button.maplibregl-ctrl-terrain-enabled .maplibregl-ctrl-icon {
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2222%22%20height%3D%2222%22%20fill%3D%22%2333b5e5%22%20viewBox%3D%220%200%2022%2022%22%3E%3Cpath%20d%3D%22m1.754%2013.406%204.453-4.851%203.09%203.09%203.281%203.277.969-.969-3.309-3.312%203.844-4.121%206.148%206.886h1.082v-.855l-7.207-8.07-4.84%205.187L6.169%206.57l-5.48%205.965v.871ZM.688%2016.844h20.625v1.375H.688Zm0%200%22%2F%3E%3C%2Fsvg%3E");
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2222%22%20height%3D%2222%22%20fill%3D%22%2333b5e5%22%20viewBox%3D%220%200%2022%2022%22%3E%3Cpath%20d%3D%22m1.754%2013.406%204.453-4.851%203.09%203.09%203.281%203.277.969-.969-3.309-3.312%203.844-4.121%206.148%206.886h1.082v-.855l-7.207-8.07-4.84%205.187L6.169%206.57l-5.48%205.965v.871ZM.688%2016.844h20.625v1.375H.688Zm0%200%22%2F%3E%3C%2Fsvg%3E");
+}
+.maplibregl-map .maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon {
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2229%22%20height%3D%2229%22%20fill%3D%22%2333b5e5%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20d%3D%22M10%204C9%204%209%205%209%205v.1A5%205%200%200%200%205.1%209H5s-1%200-1%201%201%201%201%201h.1A5%205%200%200%200%209%2014.9v.1s0%201%201%201%201-1%201-1v-.1a5%205%200%200%200%203.9-3.9h.1s1%200%201-1-1-1-1-1h-.1A5%205%200%200%200%2011%205.1V5s0-1-1-1m0%202.5a3.5%203.5%200%201%201%200%207%203.5%203.5%200%201%201%200-7%22%2F%3E%3Ccircle%20cx%3D%2210%22%20cy%3D%2210%22%20r%3D%222%22%2F%3E%3C%2Fsvg%3E");
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2229%22%20height%3D%2229%22%20fill%3D%22%2333b5e5%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20d%3D%22M10%204C9%204%209%205%209%205v.1A5%205%200%200%200%205.1%209H5s-1%200-1%201%201%201%201%201h.1A5%205%200%200%200%209%2014.9v.1s0%201%201%201%201-1%201-1v-.1a5%205%200%200%200%203.9-3.9h.1s1%200%201-1-1-1-1-1h-.1A5%205%200%200%200%2011%205.1V5s0-1-1-1m0%202.5a3.5%203.5%200%201%201%200%207%203.5%203.5%200%201%201%200-7%22%2F%3E%3Ccircle%20cx%3D%2210%22%20cy%3D%2210%22%20r%3D%222%22%2F%3E%3C%2Fsvg%3E");
+}
+.maplibregl-map .maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon {
+  -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2229%22%20height%3D%2229%22%20fill%3D%22%2333b5e5%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20d%3D%22M10%204C9%204%209%205%209%205v.1A5%205%200%200%200%205.1%209H5s-1%200-1%201%201%201%201%201h.1A5%205%200%200%200%209%2014.9v.1s0%201%201%201%201-1%201-1v-.1a5%205%200%200%200%203.9-3.9h.1s1%200%201-1-1-1-1-1h-.1A5%205%200%200%200%2011%205.1V5s0-1-1-1m0%202.5a3.5%203.5%200%201%201%200%207%203.5%203.5%200%201%201%200-7%22%2F%3E%3C%2Fsvg%3E");
+  mask-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2229%22%20height%3D%2229%22%20fill%3D%22%2333b5e5%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20d%3D%22M10%204C9%204%209%205%209%205v.1A5%205%200%200%200%205.1%209H5s-1%200-1%201%201%201%201%201h.1A5%205%200%200%200%209%2014.9v.1s0%201%201%201%201-1%201-1v-.1a5%205%200%200%200%203.9-3.9h.1s1%200%201-1-1-1-1-1h-.1A5%205%200%200%200%2011%205.1V5s0-1-1-1m0%202.5a3.5%203.5%200%201%201%200%207%203.5%203.5%200%201%201%200-7%22%2F%3E%3C%2Fsvg%3E");
+}
+

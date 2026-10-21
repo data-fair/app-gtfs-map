@@ -27,7 +27,14 @@ const PUBLIC_SITE_INFO = {
       primary: '#1976D2',
       secondary: '#424242',
       accent: '#82B1FF'
-    }
+    },
+    // the four session themes, resolved from prefers-color-scheme / forced-colors
+    dark: true,
+    darkColors: { background: '#121212', surface: '#212121', primary: '#2196F3', secondary: '#90CAF9', accent: '#FFB74D' },
+    hc: true,
+    hcColors: { background: '#FFFFFF', surface: '#FFFFFF', primary: '#0D47A1', secondary: '#000000', accent: '#BF360C' },
+    hcDark: true,
+    hcDarkColors: { background: '#000000', surface: '#000000', primary: '#FFEB3B', secondary: '#FFFFFF', accent: '#FFB74D' }
   }
 }
 

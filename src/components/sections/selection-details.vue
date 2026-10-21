@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FeatureCollection, Point } from 'geojson'
 import RouteDetails from './route-details.vue'
 import StopDetails from './stop-details.vue'
@@ -7,6 +8,8 @@ import VehicleDetails from './vehicle-details.vue'
 import type { RouteInfo } from '@/composables/gtfs.js'
 import type { Selection } from '@/composables/selection.js'
 import type { VehicleProperties } from '@/composables/use-vehicles.js'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   selection: Selection | null
@@ -59,17 +62,17 @@ const vehicle = computed(() => {
     v-else-if="vehicle"
     :vehicle="vehicle"
   />
-  <div
+  <p
     v-else
-    class="empty-details"
+    class="text-body-medium text-medium-emphasis"
   >
-    Cliquez sur une ligne, un arrêt ou un véhicule de la carte pour afficher son détail.
-  </div>
+    {{ t('hint') }}
+  </p>
 </template>
 
-<style scoped>
-.empty-details {
-  color: #777;
-  font-size: 0.9em;
-}
-</style>
+<i18n lang="yaml">
+fr:
+  hint: Cliquez sur une ligne, un arrêt ou un véhicule de la carte pour afficher son détail.
+en:
+  hint: Click a route, a stop or a vehicle on the map to show its details.
+</i18n>

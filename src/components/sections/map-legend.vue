@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { mdiAlertCircleOutline, mdiClockOutline } from '@mdi/js'
 import dayjs from 'dayjs'
 import RouteBadge from '../route-badge.vue'
 import type { RouteInfo } from '@/composables/gtfs.js'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   title: string
@@ -32,20 +35,20 @@ const sortedRoutes = computed(() => [...props.routes].sort((a, b) => a.shortName
 
 const lastUpdatedLabel = computed(() => props.lastUpdated ? dayjs(props.lastUpdated).format('HH:mm:ss') : null)
 
-function selectRoute (routeId: string) {
-  selectedRouteId.value = selectedRouteId.value === routeId ? null : routeId
+function selectRoute (routeId: string | null | undefined) {
+  selectedRouteId.value = routeId ?? null
   emit('select-route', selectedRouteId.value)
 }
 </script>
 
 <template>
   <div class="map-legend">
-    <div class="legend-title">
+    <div class="text-title-small mb-1">
       {{ title }}
     </div>
     <div
       v-if="hasVehicles"
-      class="rt-status"
+      class="d-flex align-center ga-1 pb-1 text-body-small text-medium-emphasis"
     >
       <template v-if="realtimeMessage">
         <v-icon
@@ -59,73 +62,47 @@ function selectRoute (routeId: string) {
           :icon="mdiClockOutline"
           size="x-small"
         />
-        {{ vehicleCount }} véhicule{{ vehicleCount > 1 ? 's' : '' }} · {{ lastUpdatedLabel }}
+        {{ t('vehicles', vehicleCount) }} · {{ lastUpdatedLabel }}
       </template>
       <template v-else>
-        Recherche des véhicules…
+        {{ t('searching') }}
       </template>
     </div>
-    <div
-      v-if="sortedRoutes.length"
-      class="routes-list"
-    >
-      <div class="routes-title">
-        Lignes du réseau
+    <template v-if="sortedRoutes.length">
+      <v-divider class="my-1" />
+      <div class="text-label-small text-uppercase text-medium-emphasis">
+        {{ t('routes') }}
       </div>
-      <button
-        v-for="route in sortedRoutes"
-        :key="route.routeId"
-        class="route-item"
-        :class="{ selected: route.routeId === selectedRouteId }"
-        type="button"
-        :aria-pressed="route.routeId === selectedRouteId"
-        @click="selectRoute(route.routeId)"
+      <v-chip-group
+        :model-value="selectedRouteId"
+        column
+        selected-class="border-primary border-opacity-100"
+        @update:model-value="selectRoute"
       >
         <RouteBadge
+          v-for="route in sortedRoutes"
+          :key="route.routeId"
+          class="route-item"
+          :class="{ selected: route.routeId === selectedRouteId }"
+          :value="route.routeId"
           :route-name="route.shortName"
           :color="route.color"
+          border="md opacity-0"
+          role="button"
+          :aria-pressed="route.routeId === selectedRouteId"
         />
-      </button>
-    </div>
+      </v-chip-group>
+    </template>
   </div>
 </template>
 
-<style scoped>
-.legend-title {
-  font-weight: 600;
-  font-size: 0.95em;
-  margin-bottom: 4px;
-}
-.rt-status {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-bottom: 4px;
-  font-size: 0.8em;
-  color: #555;
-}
-.routes-list {
-  border-top: 1px solid #e0e0e0;
-  padding-top: 8px;
-  margin-top: 4px;
-}
-.routes-title {
-  font-size: 0.75em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #777;
-  margin-bottom: 6px;
-}
-.route-item {
-  display: inline-block;
-  margin: 2px;
-  padding: 2px;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-}
-.route-item.selected {
-  border-color: #1976D2;
-}
-</style>
+<i18n lang="yaml">
+fr:
+  vehicles: "{n} véhicule | {n} véhicule | {n} véhicules"
+  searching: Recherche des véhicules…
+  routes: Lignes du réseau
+en:
+  vehicles: "no vehicle | {n} vehicle | {n} vehicles"
+  searching: Looking for vehicles…
+  routes: Network routes
+</i18n>

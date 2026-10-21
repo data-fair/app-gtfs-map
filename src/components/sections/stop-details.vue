@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import RouteBadge from '../route-badge.vue'
 import { colorsByShortName, loadDepartures, type Departure, type RouteInfo } from '@/composables/gtfs.js'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   stopId: string
@@ -31,12 +34,12 @@ onMounted(async () => {
 
 <template>
   <div class="gtfs-details">
-    <div class="details-title">
-      {{ stopName || 'Arrêt' }}
+    <div class="font-weight-bold mb-1">
+      {{ stopName || t('stop') }}
     </div>
     <div
       v-if="routes.length"
-      class="details-line"
+      class="text-body-medium text-medium-emphasis mb-1"
     >
       <RouteBadge
         v-for="route in routes.slice(0, 12)"
@@ -47,35 +50,35 @@ onMounted(async () => {
       />
     </div>
     <template v-if="stopTimesHref">
-      <div class="details-section">
-        Prochains passages
+      <div class="text-label-small text-uppercase text-medium-emphasis mt-2">
+        {{ t('departures') }}
       </div>
       <div
         v-if="loadError"
-        class="details-line"
+        class="text-body-medium text-medium-emphasis mb-1"
       >
-        Horaires indisponibles
+        {{ t('unavailable') }}
       </div>
       <div
         v-else-if="departures === null"
-        class="details-line"
+        class="text-body-medium text-medium-emphasis mb-1"
       >
-        Chargement…
+        {{ t('loading') }}
       </div>
       <div
         v-else-if="!departures.length"
-        class="details-line"
+        class="text-body-medium text-medium-emphasis mb-1"
       >
-        Aucun passage à venir aujourd'hui
+        {{ t('none') }}
       </div>
       <div
         v-else
-        class="departures"
+        class="d-flex flex-column ga-1"
       >
         <div
           v-for="(departure, i) in departures"
           :key="i"
-          class="departure"
+          class="d-flex align-center ga-2 text-body-medium"
         >
           <strong class="departure-time">{{ departure.time }}</strong>
           <RouteBadge
@@ -85,7 +88,7 @@ onMounted(async () => {
           />
           <span
             v-if="departure.destination"
-            class="departure-dest"
+            class="text-medium-emphasis text-truncate"
           >{{ departure.destination }}</span>
         </div>
       </div>
@@ -94,44 +97,24 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.details-title {
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  margin-bottom: 0.25em;
-}
-.details-line {
-  color: #555;
-  font-size: 0.85em;
-  margin-bottom: 0.25em;
-}
-.details-section {
-  font-size: 0.75em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #777;
-  margin-top: 0.5em;
-  margin-bottom: 0.25em;
-}
-.departures {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25em;
-}
-.departure {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  font-size: 0.9em;
-}
+/* aligned columns of times: no Vuetify utility for tabular figures */
 .departure-time {
   min-width: 2.8em;
   font-variant-numeric: tabular-nums;
 }
-.departure-dest {
-  color: #555;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 </style>
+
+<i18n lang="yaml">
+fr:
+  stop: Arrêt
+  departures: Prochains passages
+  unavailable: Horaires indisponibles
+  loading: Chargement…
+  none: Aucun passage à venir aujourd'hui
+en:
+  stop: Stop
+  departures: Next departures
+  unavailable: Timetable unavailable
+  loading: Loading…
+  none: No more departures today
+</i18n>

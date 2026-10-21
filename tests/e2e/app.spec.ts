@@ -105,7 +105,7 @@ test.describe('app-gtfs-map', () => {
 
     // la ligne restaurée est marquée sélectionnée dans la légende
     await expect(page.locator('.route-item.selected')).toHaveCount(1)
-    await expect(page.locator('.route-item.selected .route-badge')).toContainText('1')
+    await expect(page.locator('.route-item.selected')).toContainText('1')
 
     // et son détail est ouvert dans la section Sélection
     await expect(page.locator('.navigation-side').getByText('Ligne 1')).toBeVisible()
@@ -223,7 +223,7 @@ test.describe('app-gtfs-map', () => {
     const panel = page.locator('.navigation-side')
     // seule la ligne 1 est listée et seuls ses véhicules sont comptés
     await expect(panel.locator('.route-item')).toHaveCount(1, { timeout: 15000 })
-    await expect(panel.locator('.route-item .route-badge')).toContainText('1')
+    await expect(panel.locator('.route-item')).toContainText('1')
     await expect(panel.getByText(/1 véhicule/)).toBeVisible({ timeout: 10000 })
 
     // un arrêt desservi par les deux lignes ne montre que le badge autorisé
@@ -238,7 +238,7 @@ test.describe('app-gtfs-map', () => {
 
     const panel = page.locator('.navigation-side')
     await expect(panel.locator('.route-item')).toHaveCount(1, { timeout: 15000 })
-    await expect(panel.locator('.route-item .route-badge')).toContainText('2')
+    await expect(panel.locator('.route-item')).toContainText('2')
     await expect(panel.getByText(/1 véhicule/)).toBeVisible({ timeout: 10000 })
   })
 

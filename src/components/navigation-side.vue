@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { mdiMapLegend, mdiSelectionMarker } from '@mdi/js'
 import type { FeatureCollection, Point } from 'geojson'
 import SelectionDetails from './sections/selection-details.vue'
@@ -22,6 +23,8 @@ const props = defineProps<{
   allowedRouteNames: Set<string> | null
   vehicles: FeatureCollection<Point, VehicleProperties> | null
 }>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'select-route', routeId: string | null): void
@@ -49,14 +52,19 @@ watch(() => props.selection, (value) => {
     class="navigation-side"
     multiple
     variant="accordion"
+    static
     flat
   >
-    <v-expansion-panel :disabled="!selection">
-      <v-expansion-panel-title>
-        <h3>
-          <v-icon :icon="mdiSelectionMarker" />&nbsp;
-          Sélection
-        </h3>
+    <v-expansion-panel>
+      <v-expansion-panel-title
+        :title="t(panels.includes(SELECTION_PANEL) ? 'collapse' : 'expand', { section: t('selection') })"
+        class="px-3"
+      >
+        <v-icon
+          :icon="mdiSelectionMarker"
+          start
+        />
+        {{ t('selection') }}
       </v-expansion-panel-title>
       <v-expansion-panel-text>
         <selection-details
@@ -70,11 +78,15 @@ watch(() => props.selection, (value) => {
     </v-expansion-panel>
     <v-expansion-panel>
       <v-divider />
-      <v-expansion-panel-title>
-        <h3>
-          <v-icon :icon="mdiMapLegend" />&nbsp;
-          Légende
-        </h3>
+      <v-expansion-panel-title
+        :title="t(panels.includes(LEGEND_PANEL) ? 'collapse' : 'expand', { section: t('legend') })"
+        class="px-3"
+      >
+        <v-icon
+          :icon="mdiMapLegend"
+          start
+        />
+        {{ t('legend') }}
       </v-expansion-panel-title>
       <v-expansion-panel-text>
         <map-legend
@@ -91,3 +103,23 @@ watch(() => props.selection, (value) => {
     </v-expansion-panel>
   </v-expansion-panels>
 </template>
+
+<style scoped>
+/* no padding prop on v-expansion-panel-text: the same 12 px gutter as the section titles (px-3) */
+.navigation-side :deep(.v-expansion-panel-text__wrapper) {
+  padding-inline: 12px;
+}
+</style>
+
+<i18n lang="yaml">
+fr:
+  selection: Sélection
+  legend: Légende
+  collapse: Replier « {section} »
+  expand: Déplier « {section} »
+en:
+  selection: Selection
+  legend: Legend
+  collapse: Collapse "{section}"
+  expand: Expand "{section}"
+</i18n>

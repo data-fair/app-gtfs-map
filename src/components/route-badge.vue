@@ -11,20 +11,26 @@ const textColor = computed(() => contrastTextColor(props.color))
 </script>
 
 <template>
-  <span
-    class="route-badge"
-    :style="{ backgroundColor: color, color: textColor }"
-  >{{ routeName }}</span>
+  <v-chip
+    class="route-badge text-label-large font-weight-bold justify-center"
+    :color="color"
+    :base-color="color"
+    :style="{ color: textColor }"
+    variant="flat"
+    size="x-small"
+    rounded="pill"
+  >
+    <span class="route-badge__text d-inline-block">{{ routeName }}</span>
+  </v-chip>
 </template>
 
 <style scoped>
+/* a one-digit route keeps a pill shape instead of a circle */
 .route-badge {
-  display: inline-block;
   min-width: 2em;
-  padding: 0.1em 0.5em;
-  border-radius: 1em;
-  font-weight: 600;
-  font-size: 0.85em;
-  text-align: center;
+}
+/* centre the digits' ink, not the font box whose descent leaves more room below digits */
+.route-badge__text {
+  text-box: trim-both cap alphabetic;
 }
 </style>
