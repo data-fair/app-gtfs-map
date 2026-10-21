@@ -167,6 +167,8 @@ export function applyFallbackColor (fc: FeatureCollection, fallback: string): Fe
   for (const feature of fc.features) {
     const props = feature.properties as Record<string, unknown>
     props.color = normalizeColor(props.route_color as string) ?? fallback
+    // an integer route_id column (M réso) must match the string ids of the URL, the legend and GTFS-RT
+    if (typeof props.route_id === 'number') props.route_id = String(props.route_id)
   }
   return fc
 }

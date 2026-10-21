@@ -51,16 +51,16 @@ onMounted(async () => {
         Prochains passages
       </div>
       <div
-        v-if="departures === null"
-        class="details-line"
-      >
-        Chargement…
-      </div>
-      <div
-        v-else-if="loadError"
+        v-if="loadError"
         class="details-line"
       >
         Horaires indisponibles
+      </div>
+      <div
+        v-else-if="departures === null"
+        class="details-line"
+      >
+        Chargement…
       </div>
       <div
         v-else-if="!departures.length"

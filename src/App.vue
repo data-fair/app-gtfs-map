@@ -57,7 +57,8 @@ const fallbackColor = computed(() => (config.value as any)?.map?.fallbackColor ?
 // toutes les lignes présentes dans les tracés bruts, pour résoudre le mode exclusion
 const allRouteIds = computed(() => (rawShapes.value?.features ?? [])
   .map(f => (f.properties as Record<string, unknown> | null)?.route_id)
-  .filter((id): id is string => typeof id === 'string' && !!id))
+  .filter(id => (typeof id === 'string' || typeof id === 'number') && id !== '')
+  .map(String))
 
 const allowedRouteIds = computed(() => resolveAllowedRouteIds(
   (config.value as any)?.routes?.mode,

@@ -179,6 +179,15 @@ test.describe('couleurs GTFS', () => {
     expect(fc.features[2].properties!.color).toBe('#1976D2')
   })
 
+  test('applyFallbackColor turns an integer route_id into a string', () => {
+    const fc: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] }, properties: { route_id: 91 } }]
+    }
+    applyFallbackColor(fc, '#1976D2')
+    expect(fc.features[0].properties!.route_id).toBe('91')
+  })
+
   test('buildRouteIndex indexe par route_id avec le nom et la couleur', () => {
     const fc = {
       type: 'FeatureCollection' as const,
