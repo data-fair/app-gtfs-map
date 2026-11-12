@@ -188,7 +188,7 @@
         >
           <v-sheet
             rounded="t-lg"
-            elevation="8"
+            elevation="5"
             class="map-panel-sheet position-absolute bottom-0 left-0 right-0"
           >
             <div ref="headerEl">
