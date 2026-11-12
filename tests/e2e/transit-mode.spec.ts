@@ -11,8 +11,8 @@ async function mockRouteTypes (page: Page, types: Record<string, number>) {
   }))
 }
 
-test.describe('mode de transport', () => {
-  test('légende groupée par mode, sélection unique et Tab entre les groupes, mode dans les fiches', async ({ page }) => {
+test.describe('transit mode', () => {
+  test('legend grouped by mode, single selection and Tab between groups, mode in the detail cards', async ({ page }) => {
     await mockApp(page, { vehicles: 2 })
     await mockRouteTypes(page, { A: 3, B: 1 })
     await page.goto('/')
@@ -62,7 +62,7 @@ test.describe('mode de transport', () => {
     await expect(panel.getByText('bus-2', { exact: true }).locator('..')).toContainText('Métro')
   })
 
-  test('réseau à un seul mode : ni titre de groupe ni mode dans la fiche', async ({ page }) => {
+  test('single-mode network: neither group title nor mode in the detail card', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     // a route without mode does not count as a second mode
     await mockRouteTypes(page, { A: 3 })

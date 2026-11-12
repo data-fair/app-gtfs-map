@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
 import type { FeatureCollection } from 'geojson'
+import { expect, test } from '@playwright/test'
 import {
   applyFallbackColor,
   departuresQuery,
@@ -25,13 +25,13 @@ import {
   selectDepartures
 } from '../../src/composables/gtfs'
 
-test.describe('URLs API', () => {
-  test('datasetDocUrl s\'appuie sur apiUrl, jamais sur un chemin relatif', () => {
+test.describe('API URLs', () => {
+  test('datasetDocUrl relies on apiUrl, never on a relative path', () => {
     expect(datasetDocUrl('https://host/data-fair/api/v1', 'abc')).toBe('https://host/data-fair/api/v1/datasets/abc')
     expect(datasetDocUrl('https://host/data-fair/api/v1/', 'abc')).toBe('https://host/data-fair/api/v1/datasets/abc')
   })
 
-  test('departuresQuery filtre l\'arrêt avec le suffixe _eq', () => {
+  test('departuresQuery filters the stop with the _eq suffix', () => {
     const query = departuresQuery('S1', new Date(2026, 8, 9, 10, 30))
     expect(query.stop_id_eq).toBe('S1')
     expect(query).not.toHaveProperty('stop_id')
@@ -40,7 +40,7 @@ test.describe('URLs API', () => {
     expect(query.sort).toBe('arrival_time')
   })
 
-  test('finalizedAt transmis quand le jeu en a un, absent sinon', () => {
+  test('finalizedAt passed when the dataset has one, absent otherwise', () => {
     expect(departuresQuery('S1', new Date(), '2026-09-16T20:57:56.000Z').finalizedAt).toBe('2026-09-16T20:57:56.000Z')
     expect(departuresQuery('S1', new Date())).not.toHaveProperty('finalizedAt')
     expect(geoJsonQuery('2026-09-16T20:57:56.000Z')).toMatchObject({ format: 'geojson', finalizedAt: '2026-09-16T20:57:56.000Z' })
@@ -48,7 +48,7 @@ test.describe('URLs API', () => {
     expect(geoJsonQuery('')).not.toHaveProperty('finalizedAt')
   })
 
-  test('toGeoJsonLayer écarte les objets sans géométrie et signale la troncature', () => {
+  test('toGeoJsonLayer drops objects without geometry and reports truncation', () => {
     const raw = {
       type: 'FeatureCollection' as const,
       total: 3,
@@ -65,29 +65,29 @@ test.describe('URLs API', () => {
 })
 
 test.describe('classifyDataset', () => {
-  test('classe les trois jeux liés d\'après leur schéma', () => {
+  test('classifies the three linked datasets from their schema', () => {
     expect(classifyDataset({ schema: [{ key: 'geometry' }, { key: 'route_short_name' }] })).toBe('shapes')
     expect(classifyDataset({ schema: [{ key: 'trip_id' }, { key: 'arrival_time' }] })).toBe('stop-times')
     expect(classifyDataset({ schema: [{ key: 'stop_name' }, { key: 'routes' }] })).toBe('stops')
   })
 
-  test('l\'ordre importe : un jeu d\'horaires avec stop_name reste « horaires »', () => {
+  test('order matters: a timetable dataset with stop_name stays « horaires »', () => {
     expect(classifyDataset({ schema: [{ key: 'stop_name' }, { key: 'arrival_time' }] })).toBe('stop-times')
   })
 
-  test('repli sur le suffixe de titre posé par le traitement', () => {
+  test('falls back to the title suffix set by the processing', () => {
     expect(classifyDataset({ schema: [], title: 'Réseau Kicéo - tracés' })).toBe('shapes')
     expect(classifyDataset({ schema: [], title: 'Réseau Kicéo - arrêts' })).toBe('stops')
     expect(classifyDataset({ schema: [], title: 'Réseau Kicéo - horaires' })).toBe('stop-times')
   })
 
-  test('un jeu de métadonnées (sans schéma) n\'est classé dans aucun rôle', () => {
+  test('a metadata dataset (without schema) is not classified in any role', () => {
     expect(classifyDataset({ schema: [], title: 'Réseau Kicéo - métadonnées' })).toBeNull()
   })
 })
 
 test.describe('findRealtimeUrl', () => {
-  test('préfère le lien public porté par la pièce jointe distante', () => {
+  test('prefers the public link carried by the remote attachment', () => {
     const url = findRealtimeUrl({
       id: 'gtfs-meta',
       href: 'https://api.interne.example/api/v1/datasets/gtfs-meta',
@@ -103,7 +103,7 @@ test.describe('findRealtimeUrl', () => {
     expect(url).toBe('https://data.example/api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf')
   })
 
-  test('reconstruit l\'URL proxifiée quand le lien public est absent', () => {
+  test('rebuilds the proxied URL when the public link is missing', () => {
     const url = findRealtimeUrl({
       id: 'gtfs-meta',
       href: 'api/v1/datasets/gtfs-meta',
@@ -115,7 +115,7 @@ test.describe('findRealtimeUrl', () => {
     expect(url).toBe('api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt.protobuf')
   })
 
-  test('préfère la pièce jointe préfixée gtfs-rt parmi les pièces distantes', () => {
+  test('prefers the gtfs-rt prefixed attachment among the remote attachments', () => {
     const url = findRealtimeUrl({
       id: 'gtfs-meta',
       attachments: [
@@ -126,31 +126,31 @@ test.describe('findRealtimeUrl', () => {
     expect(url).toBe('api/v1/datasets/gtfs-meta/metadata-attachments/gtfs-rt-vehicle.protobuf')
   })
 
-  test('retourne null sans pièce jointe distante', () => {
+  test('returns null without remote attachment', () => {
     expect(findRealtimeUrl({ id: 'x', attachments: [{ type: 'file', name: 'a.txt' }] })).toBeNull()
     expect(findRealtimeUrl({ id: 'x' })).toBeNull()
   })
 
-  test('ignore une pièce jointe distante qui n\'est pas le flux gtfs-rt', () => {
+  test('ignores a remote attachment that is not the gtfs-rt feed', () => {
     expect(findRealtimeUrl({ id: 'x', attachments: [{ type: 'remoteFile', name: 'autre.flux' }] })).toBeNull()
   })
 
-  test('hasRealtimeAttachment ne retient que le flux gtfs-rt distant', () => {
+  test('hasRealtimeAttachment only keeps the remote gtfs-rt feed', () => {
     expect(hasRealtimeAttachment({ id: 'x', attachments: [{ type: 'remoteFile', name: 'gtfs-rt.protobuf' }] })).toBe(true)
     expect(hasRealtimeAttachment({ id: 'x', attachments: [{ type: 'remoteFile', name: 'autre.flux' }] })).toBe(false)
     expect(hasRealtimeAttachment({ id: 'x', attachments: [{ type: 'file', name: 'gtfs-rt.protobuf' }] })).toBe(false)
   })
 })
 
-test.describe('famille de jeux', () => {
-  test('linksBackTo exige un lien retour vers le jeu sélectionné', () => {
+test.describe('dataset family', () => {
+  test('linksBackTo requires a back link to the selected dataset', () => {
     expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, 'meta')).toBe(true)
     expect(linksBackTo({ relatedDatasets: [{ id: 'autre' }] }, 'meta')).toBe(false)
     expect(linksBackTo({}, 'meta')).toBe(false)
     expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, undefined)).toBe(false)
   })
 
-  test('familyFromConfig classifie les entrées liées du tableau datasets, sans l\'entrée 0', () => {
+  test('familyFromConfig classifies the linked entries of the datasets array, without entry 0', () => {
     const datasets = [
       { id: 'meta', href: 'api/v1/datasets/meta', title: 'Réseau - métadonnées', schema: [] },
       { id: 'shapes', href: 'api/v1/datasets/shapes', title: 'Réseau - tracés', schema: [{ key: 'route_short_name' }] },
@@ -164,13 +164,13 @@ test.describe('famille de jeux', () => {
     expect(family['stop-times']?.id).toBe('stoptimes')
   })
 
-  test('familyFromConfig ignore les entrées non reconnues et tolère un tableau absent', () => {
+  test('familyFromConfig ignores unrecognized entries and tolerates a missing array', () => {
     expect(familyFromConfig([{ id: 'meta' }, { id: 'autre', href: 'x', title: 'Autre jeu', schema: [] }] as any)).toEqual({})
     expect(familyFromConfig(undefined)).toEqual({})
     expect(familyFromConfig([undefined, { id: 's', href: 'x', title: 'S - tracés', schema: [] }] as any).shapes?.id).toBe('s')
   })
 
-  test('isTruncated compare le total au nombre d\'objets renvoyés', () => {
+  test('isTruncated compares the total to the number of returned objects', () => {
     expect(isTruncated(10001, 10000)).toBe(true)
     expect(isTruncated(10000, 10000)).toBe(false)
     expect(isTruncated(null, 10)).toBe(false)
@@ -178,8 +178,8 @@ test.describe('famille de jeux', () => {
   })
 })
 
-test.describe('couleurs GTFS', () => {
-  test('normalizeColor accepte les hex 6 chiffres avec ou sans #', () => {
+test.describe('GTFS colors', () => {
+  test('normalizeColor accepts 6-digit hex with or without #', () => {
     expect(normalizeColor('00AAFF')).toBe('#00AAFF')
     expect(normalizeColor('#00aaff')).toBe('#00aaff')
     expect(normalizeColor('')).toBeNull()
@@ -187,7 +187,7 @@ test.describe('couleurs GTFS', () => {
     expect(normalizeColor('#12345')).toBeNull()
   })
 
-  test('applyFallbackColor normalise route_color et applique le repli', () => {
+  test('applyFallbackColor normalizes route_color and applies the fallback', () => {
     const fc: FeatureCollection = {
       type: 'FeatureCollection',
       features: [
@@ -211,7 +211,7 @@ test.describe('couleurs GTFS', () => {
     expect(fc.features[0].properties!.route_id).toBe('91')
   })
 
-  test('buildRouteIndex indexe par route_id avec le nom et la couleur', () => {
+  test('buildRouteIndex indexes by route_id with the name and the color', () => {
     const fc = {
       type: 'FeatureCollection' as const,
       features: [
@@ -226,7 +226,7 @@ test.describe('couleurs GTFS', () => {
     expect(index.get('B')?.color).toBe('#1976D2')
   })
 
-  test('colorsByShortName indexe les couleurs par nom court, premier doublon conservé', () => {
+  test('colorsByShortName indexes colors by short name, first duplicate kept', () => {
     const fc = {
       type: 'FeatureCollection' as const,
       features: [
@@ -246,7 +246,7 @@ test.describe('couleurs GTFS', () => {
     expect(withEmpty.size).toBe(0)
   })
 
-  test('filterPlatformStops retire les stations parentes, garde plateformes et flux sans location_type', () => {
+  test('filterPlatformStops removes parent stations, keeps platforms and feeds without location_type', () => {
     const fc: FeatureCollection = {
       type: 'FeatureCollection',
       features: [
@@ -262,11 +262,11 @@ test.describe('couleurs GTFS', () => {
     expect(fc.features).toHaveLength(4)
   })
 
-  test('filterPlatformStops tolère une collection absente', () => {
+  test('filterPlatformStops tolerates a missing collection', () => {
     expect(filterPlatformStops(null)).toBeNull()
   })
 
-  test('contrastTextColor choisit un texte lisible selon la luminance', () => {
+  test('contrastTextColor picks a readable text according to luminance', () => {
     expect(contrastTextColor('#FFFFFF')).toBe('#111111')
     expect(contrastTextColor('#000000')).toBe('#ffffff')
     expect(contrastTextColor('FF8800')).toBe('#111111')
@@ -274,17 +274,17 @@ test.describe('couleurs GTFS', () => {
   })
 })
 
-test.describe('filtre de lignes', () => {
+test.describe('route filter', () => {
   const allIds = ['A', 'B', 'C']
 
-  test('resolveAllowedRouteIds : mode « toutes » ou liste vide = pas de filtre', () => {
+  test('resolveAllowedRouteIds: « toutes » mode or empty list = no filter', () => {
     expect(resolveAllowedRouteIds('all', ['A'], allIds)).toBeNull()
     expect(resolveAllowedRouteIds(undefined, ['A'], allIds)).toBeNull()
     expect(resolveAllowedRouteIds('include', [], allIds)).toBeNull()
     expect(resolveAllowedRouteIds('exclude', [], allIds)).toBeNull()
   })
 
-  test('resolveAllowedRouteIds : inclusion et exclusion', () => {
+  test('resolveAllowedRouteIds: inclusion and exclusion', () => {
     expect([...resolveAllowedRouteIds('include', ['A', 'B'], allIds)!]).toEqual(['A', 'B'])
     expect([...resolveAllowedRouteIds('exclude', ['B'], allIds)!]).toEqual(['A', 'C'])
     // numeric ids: comparison goes through String()
@@ -292,7 +292,7 @@ test.describe('filtre de lignes', () => {
     expect([...resolveAllowedRouteIds('exclude', ['1'], [1 as any, 2 as any])!]).toEqual(['2'])
   })
 
-  test('filterFeaturesByRoutes retire les tracés des lignes masquées', () => {
+  test('filterFeaturesByRoutes removes the shapes of hidden routes', () => {
     const fc: FeatureCollection = {
       type: 'FeatureCollection',
       features: [
@@ -308,7 +308,7 @@ test.describe('filtre de lignes', () => {
     expect(filterFeaturesByRoutes(fc, 'route_id', null)).toBe(fc)
   })
 
-  test('filterStopsByRouteNames retire les arrêts dont aucune ligne n\'est autorisée', () => {
+  test('filterStopsByRouteNames removes stops with no allowed route', () => {
     const fc: FeatureCollection = {
       type: 'FeatureCollection',
       features: [
@@ -324,18 +324,18 @@ test.describe('filtre de lignes', () => {
   })
 })
 
-test.describe('prochains passages', () => {
+test.describe('next departures', () => {
   // Wednesday, September 9 2026, 10:30
   const now = new Date(2026, 8, 9, 10, 30, 0)
 
-  test('parseGtfsTime gère les heures au-delà de 24', () => {
+  test('parseGtfsTime handles hours beyond 24', () => {
     expect(parseGtfsTime('10:30:00')).toBe(37800)
     expect(parseGtfsTime('25:10:00')).toBe(90600)
     expect(parseGtfsTime('')).toBeNull()
     expect(parseGtfsTime('nonsense')).toBeNull()
   })
 
-  test('ne garde que les passages à venir du jour, triés et dédoublonnés', () => {
+  test('only keeps the upcoming departures of the day, sorted and deduplicated', () => {
     const rows = [
       { route_name: '1', arrival_time: '09:00:00', week: 'Mercredi' },
       { route_name: '1', arrival_time: '10:45:00', week: 'Mercredi' },
@@ -346,7 +346,7 @@ test.describe('prochains passages', () => {
     expect(departures.map(d => d.time)).toEqual(['10:45', '12:00'])
   })
 
-  test('restreint les passages aux lignes autorisées', () => {
+  test('restricts departures to the allowed routes', () => {
     const rows = [
       { route_name: '1', arrival_time: '11:00:00', week: 'Mercredi' },
       { route_name: '2', arrival_time: '11:10:00', week: 'Mercredi' },
@@ -358,7 +358,7 @@ test.describe('prochains passages', () => {
     expect(selectDepartures(rows, now, new Set(['1'])).every(d => d.routeName === '1')).toBe(true)
   })
 
-  test('applique la validité du service : jour de la semaine et période', () => {
+  test('applies the service validity: day of week and period', () => {
     const rows = [
       { route_name: '1', arrival_time: '11:00:00', week: 'Lundi;Mardi' },
       { route_name: '1', arrival_time: '11:10:00', week: 'Mercredi', start_date: '2026-09-10' },
@@ -369,41 +369,41 @@ test.describe('prochains passages', () => {
     expect(departures.map(d => d.time)).toEqual(['11:30'])
   })
 
-  test('un passage à 25:10 apparaît comme 01:10 (service passant minuit)', () => {
+  test('a departure at 25:10 shows as 01:10 (service past midnight)', () => {
     const lateNow = new Date(2026, 8, 9, 0, 0, 0)
     const rows = [{ route_name: 'N', arrival_time: '25:10:00', week: 'Mercredi' }]
     const departures = selectDepartures(rows, lateNow)
     expect(departures[0].time).toBe('01:10')
   })
 
-  test('tolère 30 secondes de battement autour de maintenant', () => {
+  test('tolerates 30 seconds of slack around now', () => {
     const rows = [{ route_name: '1', arrival_time: '10:30:20', week: 'Mercredi' }]
     expect(selectDepartures(rows, now)).toHaveLength(1)
     const tooLate = [{ route_name: '1', arrival_time: '10:29:29', week: 'Mercredi' }]
     expect(selectDepartures(tooLate, now)).toHaveLength(0)
   })
 
-  test('borne le nombre de passages affichés à 6', () => {
+  test('caps the number of displayed departures at 6', () => {
     const rows = Array.from({ length: 10 }, (_, i) => ({ route_name: '1', arrival_time: `11:${String(i).padStart(2, '0')}:00`, week: 'Mercredi' }))
     expect(selectDepartures(rows, now)).toHaveLength(6)
   })
 })
 
 test.describe('normalizeStopRoutes', () => {
-  test('accepte le tableau renvoyé par l\'API GeoJSON', () => {
+  test('accepts the array returned by the GeoJSON API', () => {
     expect(normalizeStopRoutes(['1', '2'])).toEqual(['1', '2'])
   })
 
-  test('accepte la chaîne séparée par des points-virgules de l\'API JSON', () => {
+  test('accepts the semicolon-separated string of the JSON API', () => {
     expect(normalizeStopRoutes('1;2')).toEqual(['1', '2'])
   })
 
-  test('nettoie les segments vides et les espaces', () => {
+  test('cleans empty segments and spaces', () => {
     expect(normalizeStopRoutes('1;;2;')).toEqual(['1', '2'])
     expect(normalizeStopRoutes(['1', '', ' 2 '])).toEqual(['1', '2'])
   })
 
-  test('tolère une valeur absente ou d\'un autre type', () => {
+  test('tolerates a missing value or one of another type', () => {
     expect(normalizeStopRoutes(undefined)).toEqual([])
     expect(normalizeStopRoutes(null)).toEqual([])
     expect(normalizeStopRoutes(42)).toEqual([])

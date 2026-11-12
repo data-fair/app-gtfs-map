@@ -3,8 +3,8 @@
 // parent updateSrc calls without reloading the iframe.
 import { expect, mockApp, test } from './fixtures'
 
-test.describe('compatibilité d-frame (shim v-iframe-compat)', () => {
-  test('expose reactiveSearchParams au shim dès l\'évaluation du module', async ({ page }) => {
+test.describe('d-frame compatibility (v-iframe-compat shim)', () => {
+  test('exposes reactiveSearchParams to the shim as soon as the module is evaluated', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -16,7 +16,7 @@ test.describe('compatibilité d-frame (shim v-iframe-compat)', () => {
     expect(exposed).toBe(true)
   })
 
-  test('les paramètres écrits par le shim passent par la synchro d\'URL de la lib', async ({ page }) => {
+  test('the params written by the shim go through the URL sync of the lib', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 

@@ -1,6 +1,7 @@
+import type { VehicleCollection } from '../../src/composables/use-vehicles'
 import { expect, test } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
-import { decodeFeed, feedToVehicles, filterVehiclesByRoutes, type VehicleCollection } from '../../src/composables/use-vehicles'
+import { decodeFeed, feedToVehicles, filterVehiclesByRoutes } from '../../src/composables/use-vehicles'
 
 // CommonJS package: default import required outside the bundler
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
@@ -23,7 +24,7 @@ const buildFeed = (entities: any[]): ArrayBuffer => {
   return exact.buffer
 }
 
-test('décode les positions de véhicules et les enrichit des infos de ligne', async () => {
+test('decodes vehicle positions and enriches them with route info', async () => {
   const buffer = buildFeed([
     {
       id: 'v1',
@@ -68,7 +69,7 @@ test('décode les positions de véhicules et les enrichit des infos de ligne', a
   expect(second.properties.speed).toBe(0)
 })
 
-test('ignore les entités sans position', async () => {
+test('ignores entities without position', async () => {
   const buffer = buildFeed([
     { id: 'v1', vehicle: { trip: { routeId: 'ROUTE-A' } } },
     { id: 'v2' }
@@ -77,14 +78,14 @@ test('ignore les entités sans position', async () => {
   expect(result.features).toHaveLength(0)
 })
 
-test('décode un flux vide', async () => {
+test('decodes an empty feed', async () => {
   const buffer = buildFeed([])
   const result = feedToVehicles(buffer, routeIndex, fallbackColor)
   expect(result.type).toBe('FeatureCollection')
   expect(result.features).toHaveLength(0)
 })
 
-test('classe un flux avec positions de véhicules', async () => {
+test('classifies a feed with vehicle positions', async () => {
   const buffer = buildFeed([
     {
       id: 'v1',
@@ -100,7 +101,7 @@ test('classe un flux avec positions de véhicules', async () => {
   expect(decoded.counts).toEqual({ entities: 1, positions: 1, tripUpdates: 0 })
 })
 
-test('signale un flux TripUpdate sans positions', async () => {
+test('reports a TripUpdate feed without positions', async () => {
   const buffer = buildFeed([
     { id: 't1', tripUpdate: { trip: { tripId: 't1', routeId: 'ROUTE-A' }, stopTimeUpdate: [] } },
     { id: 't2', tripUpdate: { trip: { tripId: 't2', routeId: 'ROUTE-B' } } }
@@ -111,21 +112,21 @@ test('signale un flux TripUpdate sans positions', async () => {
   expect(decoded.counts).toEqual({ entities: 2, positions: 0, tripUpdates: 2 })
 })
 
-test('signale un flux décodé sans aucune entité', async () => {
+test('reports a decoded feed without any entity', async () => {
   const decoded = decodeFeed(buildFeed([]), routeIndex, fallbackColor)
   expect(decoded.status).toBe('empty')
   expect(decoded.collection.features).toHaveLength(0)
   expect(decoded.counts.entities).toBe(0)
 })
 
-test('signale un flux de véhicules sans position comme vide', async () => {
+test('reports a vehicle feed without position as empty', async () => {
   const buffer = buildFeed([{ id: 'v1', vehicle: { trip: { routeId: 'ROUTE-A' } } }])
   const decoded = decodeFeed(buffer, routeIndex, fallbackColor)
   expect(decoded.status).toBe('empty')
   expect(decoded.collection.features).toHaveLength(0)
 })
 
-test('filterVehiclesByRoutes restreint aux lignes autorisées', () => {
+test('filterVehiclesByRoutes restricts to the allowed routes', () => {
   const collection = feedToVehicles(buildFeed([
     { id: 'v1', vehicle: { trip: { routeId: 'ROUTE-A' }, position: { latitude: 47.1, longitude: -1.5 } } },
     { id: 'v2', vehicle: { trip: { routeId: 'ROUTE-B' }, position: { latitude: 47.2, longitude: -1.6 } } }

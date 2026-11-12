@@ -1,6 +1,6 @@
 /// <reference types="node" />
-import { test as base, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { test as base, expect } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
 
 const { transit_realtime: transitRealtime } = gtfsRealtimeBindings
@@ -280,16 +280,16 @@ async function mockSite (page: Page) {
 }
 
 /**
- * Clique sur la carte aux coordonnées géographiques données.
- * `empty: true` pour un clic volontairement dans le vide (désélection).
+ * Clicks on the map at the given geographic coordinates.
+ * `empty: true` for a deliberate click on an empty area (deselection).
  */
 export async function clickMapAt (page: Page, lngLat: [number, number], { empty = false }: { empty?: boolean } = {}) {
   if (empty) {
     await page.waitForFunction(() => window.__MAP__!.loaded())
   } else {
-    // les sources GeoJSON sont taillées et rendues de façon asynchrone : sans cette
-    // attente, queryRenderedFeatures peut ne rien trouver et le clic est pris pour
-    // un clic dans le vide (détail jamais ouvert) — instabilité observée sous charge
+    // GeoJSON sources are tiled and rendered asynchronously: without this
+    // wait, queryRenderedFeatures may find nothing and the click is taken for
+    // a click on an empty area (details never opened) — flakiness observed under load
     await expect.poll(() => page.evaluate(([lng, lat]) => {
       const m = window.__MAP__!
       return m.queryRenderedFeatures(m.project([lng, lat])).length

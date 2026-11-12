@@ -1,3 +1,8 @@
+import type {
+  LinkedRef,
+  MetadataDoc,
+  ResourceKind
+} from './gtfs.js'
 import { computed, ref, watch } from 'vue'
 import { useFetch } from '@data-fair/lib-vue/fetch.js'
 import { useConfig } from './config.js'
@@ -7,10 +12,7 @@ import {
   familyFromConfig,
   findRealtimeUrl,
   hasRealtimeAttachment,
-  linksBackTo,
-  type LinkedRef,
-  type MetadataDoc,
-  type ResourceKind
+  linksBackTo
 } from './gtfs.js'
 
 /**

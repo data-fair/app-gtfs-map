@@ -26,7 +26,7 @@ async function clickMapAt (page: Page, lngLat: [number, number], { empty = false
 }
 
 test.describe('app-gtfs-map', () => {
-  test('résout la famille de jeux liés, affiche le réseau et les véhicules', async ({ page }) => {
+  test('resolves the family of linked datasets, shows the network and the vehicles', async ({ page }) => {
     await mockApp(page, { vehicles: 2 })
     await page.goto('/')
 
@@ -55,7 +55,7 @@ test.describe('app-gtfs-map', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__captureCalled)).toBe(true)
   })
 
-  test('déclenche la capture seulement après le rendu des couches', async ({ page }) => {
+  test('triggers the capture only after the layers are rendered', async ({ page }) => {
     await mockApp(page, { shapesDelayMs: 800 })
     await page.goto('/')
 
@@ -69,7 +69,7 @@ test.describe('app-gtfs-map', () => {
     expect(captureAt).toBeGreaterThanOrEqual(shapesAt)
   })
 
-  test('signale une configuration inexploitable sans jeu lié « tracés » ni « arrêts »', async ({ page }) => {
+  test('reports an unusable configuration without a linked « tracés » or « arrêts » dataset', async ({ page }) => {
     await mockApp(page, { withoutRelated: true, withoutRealtime: true })
     await page.goto('/')
 
@@ -77,7 +77,7 @@ test.describe('app-gtfs-map', () => {
     await expect(page.getByText(/Aucun jeu lié/)).toBeVisible({ timeout: 10000 })
   })
 
-  test('affiche la carte sans statut temps réel quand le flux est absent', async ({ page }) => {
+  test('shows the map without realtime status when the feed is missing', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -88,7 +88,7 @@ test.describe('app-gtfs-map', () => {
     await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
   })
 
-  test('signale un flux GTFS-RT sans positions de véhicules (TripUpdate)', async ({ page }) => {
+  test('reports a GTFS-RT feed without vehicle positions (TripUpdate)', async ({ page }) => {
     await mockApp(page, { feedKind: 'tripUpdate' })
     await page.goto('/')
 
@@ -100,7 +100,7 @@ test.describe('app-gtfs-map', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__captureCalled)).toBe(true)
   })
 
-  test('signale un flux GTFS-RT vide', async ({ page }) => {
+  test('reports an empty GTFS-RT feed', async ({ page }) => {
     await mockApp(page, { feedKind: 'empty' })
     await page.goto('/')
 
@@ -108,7 +108,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText(/aucun véhicule/)).toBeVisible({ timeout: 10000 })
   })
 
-  test('restaure la position et la ligne sélectionnée depuis l\'URL', async ({ page }) => {
+  test('restores the position and the selected route from the URL', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/?lng=-1.53&lat=47.205&zoom=12&route=A')
 
@@ -138,7 +138,7 @@ test.describe('app-gtfs-map', () => {
     await expect(page.locator('#map-panel-drawer').getByText('Gare - Plage')).toBeVisible()
   })
 
-  test('reporte la navigation dans l\'URL, restaurée après rechargement', async ({ page }) => {
+  test('writes the navigation to the URL, restored after reload', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -168,7 +168,7 @@ test.describe('app-gtfs-map', () => {
     expect(view!.zoom).toBeCloseTo(13, 2)
   })
 
-  test('le clic dans la légende filtre la carte et ouvre le détail de la ligne', async ({ page }) => {
+  test('a click in the legend filters the map and opens the route details', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -197,7 +197,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText('Ligne 1')).toBeHidden()
   })
 
-  test('le filtre de ligne masque les arrêts des autres lignes', async ({ page }) => {
+  test('the route filter hides the stops of the other routes', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -226,7 +226,7 @@ test.describe('app-gtfs-map', () => {
     await expect.poll(renderedStops, { timeout: 15000 }).toEqual(['S1', 'S2'])
   })
 
-  test('le filtre de ligne restreint les véhicules et le compteur de la légende', async ({ page }) => {
+  test('the route filter restricts the vehicles and the legend counter', async ({ page }) => {
     await mockApp(page, { vehicles: 2 })
     await page.goto('/')
 
@@ -242,7 +242,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
   })
 
-  test('la configuration peut restreindre l\'affichage à une sélection de lignes', async ({ page }) => {
+  test('the configuration can restrict the display to a selection of routes', async ({ page }) => {
     await mockApp(page, { vehicles: 2, config: { routes: { mode: 'include', ids: ['A'] } } })
     await page.goto('/')
 
@@ -258,7 +258,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.locator('.v-expansion-panel', { hasText: 'Sélection' }).locator('.route-badge')).toHaveCount(1)
   })
 
-  test('la configuration peut masquer une sélection de lignes', async ({ page }) => {
+  test('the configuration can hide a selection of routes', async ({ page }) => {
     await mockApp(page, { vehicles: 2, config: { routes: { mode: 'exclude', ids: ['A'] } } })
     await page.goto('/')
 
@@ -268,7 +268,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText(/1 véhicule/)).toBeVisible({ timeout: 10000 })
   })
 
-  test('le clic sur une ligne de la carte ouvre le détail sans filtrer', async ({ page }) => {
+  test('a click on a route on the map opens the details without filtering', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -287,7 +287,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText('Ligne 1')).toBeHidden()
   })
 
-  test('désélection : re-clic sur l\'élément, clic sur une zone vide, Échap', async ({ page }) => {
+  test('deselection: clicking the element again, clicking an empty area, Escape', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -374,7 +374,7 @@ test.describe('app-gtfs-map', () => {
     expect(view.zoom).toBeCloseTo(view.fitZoom, 1)
   })
 
-  test('le clic sur un arrêt affiche son détail', async ({ page }) => {
+  test('a click on a stop shows its details', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
@@ -430,7 +430,7 @@ test.describe('app-gtfs-map', () => {
     expect((await items.nth(1).boundingBox())!.width).toBe(width)
   })
 
-  test('mobile : feuille du bas pour la légende et le détail, à la souris', async ({ page }) => {
+  test('mobile: bottom sheet for the legend and the details, with the mouse', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 800 })
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
@@ -471,7 +471,7 @@ test.describe('app-gtfs-map', () => {
     await expect(page.locator('.map-panel-sheet').getByText('Ligne 1')).toBeVisible()
   })
 
-  test('largeur intermédiaire : panneau repliable fermé par défaut', async ({ page }) => {
+  test('intermediate width: collapsible panel closed by default', async ({ page }) => {
     await page.setViewportSize({ width: 700, height: 800 })
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
@@ -507,7 +507,7 @@ test.describe('app-gtfs-map', () => {
     await expect(drawer.getByText('Gare Centrale')).toBeVisible()
   })
 
-  test('thème sombre : appli et contrôles de carte au thème', async ({ page }) => {
+  test('dark theme: app and map controls follow the theme', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
@@ -521,7 +521,7 @@ test.describe('app-gtfs-map', () => {
     expect(groupBg).not.toBe('rgb(255, 255, 255)')
   })
 
-  test('contraste renforcé sombre : thème hc-dark et icônes inversées', async ({ page }) => {
+  test('dark high contrast: hc-dark theme and inverted icons', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' })
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
@@ -530,7 +530,7 @@ test.describe('app-gtfs-map', () => {
     await expect(page.locator('.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon')).toHaveCSS('filter', 'invert(1)')
   })
 
-  test('session anglaise : textes de l\'appli et du panneau en anglais', async ({ page, context, baseURL }) => {
+  test('English session: app and panel texts in English', async ({ page, context, baseURL }) => {
     await context.addCookies([{ name: 'i18n_lang', value: 'en', url: baseURL! }])
     await mockApp(page, { vehicles: 2 })
     await page.goto('/')
@@ -543,7 +543,7 @@ test.describe('app-gtfs-map', () => {
     await expect(panel.getByText('Route 1')).toBeVisible()
   })
 
-  test('changement de fond : vers void et retour, double changement rapide', async ({ page }) => {
+  test('basemap switch: to void and back, quick double switch', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     // every tileserver basemap answers a minimal style carrying its name
     // dark-matter answers late, so the rapid double switch is a real race
@@ -652,7 +652,7 @@ test.describe('app-gtfs-map', () => {
     }
   })
 
-  test('positionne le panneau à gauche quand panelPosition vaut left', async ({ page }) => {
+  test('places the panel on the left when panelPosition is left', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true, config: { panelPosition: 'left' } })
     await page.goto('/')
 
@@ -677,7 +677,7 @@ test.describe('app-gtfs-map', () => {
     expect(zoomBox.y + zoomBox.height).toBeLessThan(attribBox.y)
   })
 
-  test('pré-remplit realtime.url depuis le lien public de la pièce jointe GTFS-RT', async ({ page }) => {
+  test('prefills realtime.url from the public link of the GTFS-RT attachment', async ({ page }) => {
     await mockApp(page)
 
     // parent page acting as data-fair in draft mode: in an iframe
