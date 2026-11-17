@@ -31,6 +31,16 @@ test.describe('panel', () => {
     await expect(legend).toHaveAttribute('title', 'Déplier « Légende »')
   })
 
+  test('gallery thumbnail: no action button, only the scale and the credit', async ({ page }) => {
+    await page.setViewportSize({ width: 1050, height: 450 })
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/?thumbnail=true')
+    await expect(page.locator('.maplibregl-ctrl-scale')).toHaveCount(1, { timeout: 15000 })
+    await expect(page.locator('.maplibregl-ctrl-attrib')).toHaveCount(1)
+    await expect(page.locator('.maplibregl-ctrl-zoom-in')).toHaveCount(0)
+    await expect(page.locator('.map-panel-tab')).toHaveCount(0)
+  })
+
   test('section headings for screen readers, without any visual change', async ({ page }) => {
     await page.setViewportSize({ width: 1300, height: 800 })
     await mockApp(page, { withoutRealtime: true })

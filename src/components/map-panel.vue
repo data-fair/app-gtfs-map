@@ -159,7 +159,7 @@
           <!-- a tab growing out of the drawer, inside the map box (never out of an iframe), under the
                controls of that side: same surface and elevation, no shadow at the junction, rounded on the map side -->
           <div
-            v-if="(layout === 'overlay' || layout === 'docked') && sections().length"
+            v-if="(layout === 'overlay' || layout === 'docked') && sections().length && !thumbnail"
             :class="['map-panel-tab position-absolute bg-surface elevation-4', `map-panel-tab--${location}`, location === 'right' ? 'rounded-s-lg' : 'rounded-e-lg']"
             :style="{ [location]: `${cover[location]}px`, top: `${tabTop}px` }"
           >
@@ -299,6 +299,7 @@ import { useI18n } from 'vue-i18n'
 import { useElementSize, useMutationObserver } from '@vueuse/core'
 import { mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiClose, mdiMagnify, mdiMapLegend, mdiSelectionMarker } from '@mdi/js'
 import { useDisplay } from 'vuetify'
+import reactiveSearchParams from '@data-fair/lib-vue/reactive-search-params-global.js'
 import { useMapLayout } from '../composables/use-map-layout'
 
 type Section = 'search' | 'legend' | 'selection'
@@ -326,6 +327,8 @@ const emit = defineEmits<{ deselect: [] }>()
 const { t } = useI18n()
 const slots = useSlots()
 const layout = useMapLayout()
+// the gallery thumbnail is a still image: no action button, the tab included
+const thumbnail = reactiveSearchParams.thumbnail === 'true'
 const { name, xlAndUp } = useDisplay()
 
 // [normal, large] per breakpoint, the same in every app; at sm the drawer overlays the map,

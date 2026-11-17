@@ -370,9 +370,10 @@ function setControls () {
   if (!map) return
   if (navigation) map.removeControl(navigation)
   if (scale) map.removeControl(scale)
-  navigation = new maplibregl.NavigationControl({ showCompass: false })
+  // the gallery thumbnail is a still image: no action button, only the scale and the credit
+  navigation = reactiveSearchParams.thumbnail === 'true' ? null : new maplibregl.NavigationControl({ showCompass: false })
   scale = new maplibregl.ScaleControl()
-  map.addControl(navigation, `top-${props.controls}`)
+  if (navigation) map.addControl(navigation, `top-${props.controls}`)
   map.addControl(scale, `bottom-${props.controls}`)
   setAttribution()
 }
