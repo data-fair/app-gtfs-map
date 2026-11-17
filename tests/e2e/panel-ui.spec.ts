@@ -1,5 +1,6 @@
-import { expect } from '@playwright/test'
-import { mockApp, test } from './fixtures'
+import { expect, mapConsole, mockApp, test } from './fixtures'
+
+test.use({ expectedConsole: mapConsole })
 
 // a basemap with a credit: the mocked style has none, so maplibre would hide the credit
 const CREDITED_STYLE = {

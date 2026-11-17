@@ -1,5 +1,6 @@
-import { expect } from '@playwright/test'
-import { mockApp, test, SHAPES_GEOJSON, STOPS_GEOJSON } from './fixtures'
+import { expect, mapConsole, mockApp, SHAPES_GEOJSON, STOPS_GEOJSON, test } from './fixtures'
+
+test.use({ expectedConsole: mapConsole })
 
 test.describe('initial view', () => {
   test('a resize before the first fit writes no (0, 0) view in the URL', async ({ page }) => {

@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import type { Page } from '@playwright/test'
 import { test as base, expect } from '@playwright/test'
 import gtfsRealtimeBindings from 'gtfs-realtime-bindings'
@@ -13,9 +12,8 @@ export const test = base.extend<{ consoleGuard: void, expectedConsole: string[] 
     await use(page)
     await page.unrouteAll({ behavior: 'ignoreErrors' })
   },
-  // messages a test provokes on purpose, named one by one: test.use({ expectedConsole: ['status of 500'] })
-  // GPU stall due to ReadPixels: SwiftShader performance message as soon as the maplibre canvas draws
-  expectedConsole: [['GPU stall due to ReadPixels'], { option: true }],
+  // messages a test provokes on purpose, named one by one: test.use({ expectedConsole: [...mapConsole, 'status of 500'] })
+  expectedConsole: [[], { option: true }],
   consoleGuard: [async ({ page, expectedConsole }, use) => {
     const messages: string[] = []
     page.on('console', (msg) => {
@@ -24,6 +22,7 @@ export const test = base.extend<{ consoleGuard: void, expectedConsole: string[] 
       messages.push(`[${msg.type()}] ${msg.text()}`)
     })
     page.on('pageerror', (err) => {
+      if (expectedConsole.some(text => err.message.includes(text))) return
       // harness artifact: Vite serves index.html raw, the inline `window.APPLICATION=%APPLICATION%` fails to parse
       if (err.message === "Unexpected token '%'") return
       messages.push(`[pageerror] ${err.message}`)
@@ -33,6 +32,10 @@ export const test = base.extend<{ consoleGuard: void, expectedConsole: string[] 
   }, { auto: true }]
 })
 export { expect }
+
+// SwiftShader performance message as soon as the maplibre canvas draws, see the data-fair-app skill
+// (« Appli WebGL ») : named by every spec that displays the map, with test.use({ expectedConsole: mapConsole })
+export const mapConsole = ['GPU stall due to ReadPixels']
 
 /** Minimal site info read by createSession without a request (_public.js script). */
 const PUBLIC_SITE_INFO = {

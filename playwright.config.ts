@@ -15,6 +15,8 @@ const isUnitOnly = selectedProjects.length > 0 && selectedProjects.every(p => p 
 export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   forbidOnly: !!process.env.CI,
+  // e2e on a single worker: under contention (dev server, SwiftShader) parallel runs give false failures that change at each run
+  workers: isUnitOnly ? undefined : 1,
   outputDir: './tests/output',
   use: { baseURL: BASE_URL },
   projects: [
@@ -26,7 +28,7 @@ export default defineConfig({
     : {
         command: 'PUBLIC_URL= npm run dev-app',
         url: BASE_URL,
-        env: { ...process.env, APP_PORT: String(PORT), DATA_FAIR_TEST: 'true' },
+        env: { ...process.env, APP_PORT: String(PORT) },
         reuseExistingServer: !process.env.CI
       }
 })

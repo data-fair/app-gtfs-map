@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test'
-import { expect, mockApp, test } from './fixtures'
+import { expect, mapConsole, mockApp, test } from './fixtures'
+
+test.use({ expectedConsole: mapConsole })
 
 /**
  * Clicks the map at the given geographic coordinates.
@@ -579,7 +581,7 @@ test.describe('app-gtfs-map', () => {
   })
 
   test.describe(() => {
-    test.use({ expectedConsole: ['GPU stall due to ReadPixels', 'status of 500'] })
+    test.use({ expectedConsole: [...mapConsole, 'status of 500'] })
 
     test('a basemap that fails to load keeps the previous one, its data and its credit', async ({ page }) => {
       await mockApp(page, { withoutRealtime: true, config: { map: { style: 'void' } } })

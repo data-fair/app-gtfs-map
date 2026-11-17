@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test'
-import { SHAPES_GEOJSON, clickMapAt, expect, mockApp, test } from './fixtures'
+import { clickMapAt, expect, mapConsole, mockApp, SHAPES_GEOJSON, test } from './fixtures'
+
+test.use({ expectedConsole: mapConsole })
 
 /** Serves the shapes with the given route_type per route_id (registered after mockApp, so it wins). */
 async function mockRouteTypes (page: Page, types: Record<string, number>) {

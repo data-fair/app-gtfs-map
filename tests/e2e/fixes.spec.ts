@@ -1,5 +1,6 @@
-import { expect } from '@playwright/test'
-import { clickMapAt, mockApp, test, SHAPES_GEOJSON } from './fixtures'
+import { clickMapAt, expect, mapConsole, mockApp, SHAPES_GEOJSON, test } from './fixtures'
+
+test.use({ expectedConsole: mapConsole })
 
 // M réso publishes route_id as an integer column
 const INTEGER_SHAPES = {
@@ -29,7 +30,7 @@ test.describe('fixes', () => {
   })
 
   test.describe('timetable', () => {
-    test.use({ expectedConsole: ['GPU stall due to ReadPixels', 'status of 500'] })
+    test.use({ expectedConsole: [...mapConsole, 'status of 500'] })
 
     test('a timetable that fails to load says so instead of loading forever', async ({ page }) => {
       await mockApp(page, { withoutRealtime: true })

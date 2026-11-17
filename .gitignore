@@ -6,3 +6,4 @@ src/config/.type
 tests/output
 playwright-report
 recordings
+.dev-attachments
