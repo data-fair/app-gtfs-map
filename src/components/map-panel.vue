@@ -64,16 +64,19 @@
           :ref="(el) => { if (section === 'selection') selectionPanel = el as ComponentPublicInstance | null }"
           :value="section"
         >
-          <v-expansion-panel-title
-            :title="t(panels.includes(section) ? 'collapse' : 'expand', { section: sectionTitle(section) })"
-            class="px-3"
-          >
-            <v-icon
-              :icon="icons[section]"
-              start
-            />
-            {{ sectionTitle(section) }}
-          </v-expansion-panel-title>
+          <!-- the section button inside a heading (WAI-ARIA accordion pattern): screen readers can jump between sections -->
+          <h2 class="map-panel-heading">
+            <v-expansion-panel-title
+              :title="t(panels.includes(section) ? 'collapse' : 'expand', { section: sectionTitle(section) })"
+              class="px-3"
+            >
+              <v-icon
+                :icon="icons[section]"
+                start
+              />
+              {{ sectionTitle(section) }}
+            </v-expansion-panel-title>
+          </h2>
           <v-progress-linear
             :active="!!loading[section] && panels.includes(section)"
             indeterminate
@@ -108,7 +111,7 @@
           :prepend-icon="icons.selection"
           :title="sectionTitle('selection')"
           prepend-gap="8"
-          class="ps-3 pe-2 py-2"
+          class="pl-3 pr-2 py-2"
         >
           <template #append>
             <v-btn
@@ -192,7 +195,8 @@
             class="map-panel-sheet position-absolute bottom-0 left-0 right-0"
           >
             <div ref="headerEl">
-              <!-- the drag zone: no click action, the chevrons are the explicit (and keyboard) way -->
+              <!-- the drag zone: no click action, the chevrons are the explicit (and keyboard) way;
+                   fixed 40 px height: a control size (like the 80 x 36 tab), not content -->
               <div
                 class="map-panel-handle position-relative d-flex justify-center align-center"
                 style="height: 40px"
@@ -488,6 +492,11 @@ function onHandleUp (event: PointerEvent) {
    lib-vuetify): the same 12 px gutter as the bottom sheet (pa-3) and the section titles (px-3) */
 .map-panel-sections :deep(.v-expansion-panel-text__wrapper) {
   padding-inline: 12px;
+}
+/* the heading only carries the semantics: the section button keeps its own look */
+.map-panel-heading {
+  font: inherit;
+  margin: 0;
 }
 /* no Vuetify equivalent: the handle takes vertical drags instead of scrolling the page */
 .map-panel-handle {

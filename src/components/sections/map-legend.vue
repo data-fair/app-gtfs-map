@@ -1,8 +1,8 @@
 <template>
   <div>
-    <div class="text-title-small mb-1">
+    <h3 class="text-title-small mb-1">
       {{ title }}
-    </div>
+    </h3>
     <div
       v-if="hasVehicles"
       class="d-flex align-center ga-1 pb-1 text-body-small text-medium-emphasis"

@@ -31,6 +31,22 @@ test.describe('panel', () => {
     await expect(legend).toHaveAttribute('title', 'Déplier « Légende »')
   })
 
+  test('section headings for screen readers, without any visual change', async ({ page }) => {
+    await page.setViewportSize({ width: 1300, height: 800 })
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+    const panel = page.locator('#map-panel-drawer')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+    // WAI-ARIA accordion pattern: each section button sits in a level 2 heading, the network name is level 3
+    await expect(panel.getByRole('heading', { level: 2 })).toHaveText(['Sélection', 'Légende'])
+    await expect(panel.getByRole('heading', { level: 3 }).first()).toBeVisible()
+    const heading = panel.locator('h2.map-panel-heading').first()
+    const button = heading.locator('.v-expansion-panel-title')
+    // the heading adds no margin and no height around its button
+    expect(await heading.evaluate(el => getComputedStyle(el).marginTop)).toBe('0px')
+    expect((await heading.boundingBox())!.height).toBe((await button.boundingBox())!.height)
+  })
+
   test('dark theme: panel texts and map controls follow the theme', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
     await mockApp(page, { withoutRealtime: true })
