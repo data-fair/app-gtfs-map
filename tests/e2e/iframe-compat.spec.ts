@@ -25,10 +25,10 @@ test.describe('d-frame compatibility (v-iframe-compat shim)', () => {
     // write as the shim does on updateSrc: it is the lib's reactive singleton,
     // so the parameter is reflected in the URL
     await page.evaluate(() => {
-      window.vIframeOptions!.reactiveParams.route = 'B'
+      window.vIframeOptions!.reactiveParams['_d_gtfs-shapes_route_id_eq'] = 'B'
     })
     await expect.poll(() => page.evaluate(() =>
-      new URLSearchParams(window.location.search).get('route')
+      new URLSearchParams(window.location.search).get('_d_gtfs-shapes_route_id_eq')
     )).toBe('B')
   })
 
@@ -38,12 +38,12 @@ test.describe('d-frame compatibility (v-iframe-compat shim)', () => {
     const panel = page.locator('#map-panel-drawer')
     await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
 
-    await page.evaluate(() => { window.vIframeOptions!.reactiveParams.route = 'A' })
+    await page.evaluate(() => { window.vIframeOptions!.reactiveParams['_d_gtfs-shapes_route_id_eq'] = 'A' })
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines')))
       .toEqual(['==', ['get', 'route_id'], 'A'])
     await expect(panel.getByText('Ligne 1')).toBeVisible()
 
-    await page.evaluate(() => { delete window.vIframeOptions!.reactiveParams.route })
+    await page.evaluate(() => { delete window.vIframeOptions!.reactiveParams['_d_gtfs-shapes_route_id_eq'] })
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines'))).toBe(true)
     await expect(panel.getByText('Ligne 1')).toBeHidden()
   })

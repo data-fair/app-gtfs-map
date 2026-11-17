@@ -9,10 +9,10 @@ const INTEGER_SHAPES = {
 }
 
 test.describe('fixes', () => {
-  test('integer route ids: a shared route=91 link selects that route', async ({ page }) => {
+  test('integer route ids: a shared route 91 link selects that route', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
     await page.route('**/api/v1/datasets/gtfs-shapes/lines*', route => route.fulfill({ json: INTEGER_SHAPES }))
-    await page.goto('/?route=91')
+    await page.goto('/?_d_gtfs-shapes_route_id_eq=91')
     const panel = page.locator('#map-panel-drawer')
     await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
     await expect(panel.locator('.route-item[aria-pressed="true"]')).toHaveCount(1)

@@ -189,19 +189,31 @@ watch(vehiclesError, (message) => {
 /* Route selection and panel details                                  */
 /* ------------------------------------------------------------------ */
 
-const highlightRouteId = ref<string | null>(reactiveSearchParams.route || null)
+// selected route in the URL as a selection on the shapes dataset (_d_<dataset>_route_id_eq):
+// read whatever the dataset id, written with the id of the shapes dataset
+const ROUTE_PARAM = /^_d_.+_route_id_eq$/
+const routeParams = () => Object.keys(reactiveSearchParams).filter(key => ROUTE_PARAM.test(key))
+const routeFromUrl = () => {
+  const key = routeParams()[0]
+  return key ? reactiveSearchParams[key] || null : null
+}
+
+const highlightRouteId = ref<string | null>(routeFromUrl())
 // a route restored from the URL opens its details in the panel right away
 const selection = ref<Selection | null>(highlightRouteId.value ? { kind: 'route', routeId: highlightRouteId.value } : null)
 
 // selected route persisted in the URL: link sharing and restore on refresh
-watch(highlightRouteId, (value) => {
-  if (value) reactiveSearchParams.route = value
-  else delete reactiveSearchParams.route
+watch([highlightRouteId, () => family.shapesDataset.value?.id], ([value, shapesId]) => {
+  // shapes dataset not known yet: leave the URL as it is (a parent may have just written it)
+  if (!shapesId) return
+  const key = `_d_${shapesId}_route_id_eq`
+  for (const other of routeParams()) if (other !== key) delete reactiveSearchParams[other]
+  if (value) reactiveSearchParams[key] = value
+  else delete reactiveSearchParams[key]
 })
 
 // route changed from outside (parent page through d-frame sync-params, history): follow it
-watch(() => reactiveSearchParams.route, (value) => {
-  const routeId = value || null
+watch(routeFromUrl, (routeId) => {
   if (routeId === highlightRouteId.value) return
   selectRoute(routeId)
 })

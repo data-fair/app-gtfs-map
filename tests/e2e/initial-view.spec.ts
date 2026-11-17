@@ -51,7 +51,7 @@ test.describe('initial view', () => {
     const empty = { type: 'FeatureCollection', features: [] }
     await page.route('**/api/v1/datasets/gtfs-shapes/lines*', route => route.fulfill({ json: empty }))
     await page.route('**/api/v1/datasets/gtfs-stops/lines*', route => route.fulfill({ json: empty }))
-    await page.goto('/?route=unknown')
+    await page.goto('/?_d_gtfs-shapes_route_id_eq=unknown')
     await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
     await page.waitForFunction(() => window.__MAP__?.loaded())
     const box = (await page.locator('.maplibregl-canvas').boundingBox())!

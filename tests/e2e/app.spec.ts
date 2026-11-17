@@ -112,7 +112,7 @@ test.describe('app-gtfs-map', () => {
 
   test('restores the position and the selected route from the URL', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
-    await page.goto('/?lng=-1.53&lat=47.205&zoom=12&route=A')
+    await page.goto('/?lng=-1.53&lat=47.205&zoom=12&_d_gtfs-shapes_route_id_eq=A')
 
     await expect(page.locator('.maplibregl-canvas')).toBeVisible({ timeout: 15000 })
     // the URL view must survive the shapes arrival (otherwise fitNetwork overwrites it)
@@ -180,6 +180,8 @@ test.describe('app-gtfs-map', () => {
     // the legend click filters the shapes on the chosen route
     await panel.locator('.route-item').first().click()
     await expect(panel.getByText('Ligne 1')).toBeVisible()
+    // the selection is written as a selection on the shapes dataset
+    await expect.poll(() => new URL(page.url()).searchParams.get('_d_gtfs-shapes_route_id_eq')).toBe('A')
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines')))
       .toEqual(['==', ['get', 'route_id'], 'A'])
     await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-vehicles-circle')))
@@ -338,7 +340,7 @@ test.describe('app-gtfs-map', () => {
 
   test('initial view: a route in the link without position frames that route', async ({ page }) => {
     await mockApp(page, { withoutRealtime: true })
-    await page.goto('/?route=B')
+    await page.goto('/?_d_gtfs-shapes_route_id_eq=B')
     await expect(page.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
     await expect.poll(() => page.evaluate(() => {
       const b = window.__MAP__!.getBounds()
