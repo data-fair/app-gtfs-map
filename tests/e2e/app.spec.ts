@@ -593,7 +593,7 @@ test.describe('app-gtfs-map', () => {
       await page.waitForResponse('**/tileserver/styles/positron/style.json')
       await expect.poll(() => page.evaluate(() => {
         const map = window.__MAP__!
-        return { layers: map.getStyle().layers.length > 0, lines: !!map.getLayer('gtfs-lines'), loaded: map.isStyleLoaded(), background: !!map.getLayer('background') }
+        return { layers: (map.getStyle()?.layers?.length ?? 0) > 0, lines: !!map.getLayer('gtfs-lines'), loaded: map.isStyleLoaded(), background: !!map.getLayer('background') }
       })).toEqual({ layers: true, lines: true, loaded: true, background: false })
       await expect(page.locator('.maplibregl-ctrl-attrib')).not.toContainText('OpenStreetMap')
     })
