@@ -199,6 +199,13 @@ watch(highlightRouteId, (value) => {
   else delete reactiveSearchParams.route
 })
 
+// route changed from outside (parent page through d-frame sync-params, history): follow it
+watch(() => reactiveSearchParams.route, (value) => {
+  const routeId = value || null
+  if (routeId === highlightRouteId.value) return
+  selectRoute(routeId)
+})
+
 // stale link (the route no longer exists in the network): do not filter the map down to nothing
 watch([routeIndex, highlightRouteId], ([index, id]) => {
   if (id && index.size && !index.has(id)) {

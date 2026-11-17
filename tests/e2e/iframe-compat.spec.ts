@@ -1,7 +1,9 @@
 // d-frame compatibility: the v-iframe-compat shim DataFair injects when the
 // app is embedded (portal, dashboard) reads window.vIframeOptions to apply
 // parent updateSrc calls without reloading the iframe.
-import { expect, mockApp, test } from './fixtures'
+import { expect, mapConsole, mockApp, test } from './fixtures'
+
+test.use({ expectedConsole: mapConsole })
 
 test.describe('d-frame compatibility (v-iframe-compat shim)', () => {
   test('exposes reactiveSearchParams to the shim as soon as the module is evaluated', async ({ page }) => {
@@ -28,6 +30,22 @@ test.describe('d-frame compatibility (v-iframe-compat shim)', () => {
     await expect.poll(() => page.evaluate(() =>
       new URLSearchParams(window.location.search).get('route')
     )).toBe('B')
+  })
+
+  test('a route written by the parent selects it on the map and in the panel', async ({ page }) => {
+    await mockApp(page, { withoutRealtime: true })
+    await page.goto('/')
+    const panel = page.locator('#map-panel-drawer')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+
+    await page.evaluate(() => { window.vIframeOptions!.reactiveParams.route = 'A' })
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines')))
+      .toEqual(['==', ['get', 'route_id'], 'A'])
+    await expect(panel.getByText('Ligne 1')).toBeVisible()
+
+    await page.evaluate(() => { delete window.vIframeOptions!.reactiveParams.route })
+    await expect.poll(() => page.evaluate(() => window.__MAP__!.getFilter('gtfs-lines'))).toBe(true)
+    await expect(panel.getByText('Ligne 1')).toBeHidden()
   })
 })
 
