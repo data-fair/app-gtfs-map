@@ -73,7 +73,7 @@ import type { RouteInfo } from '@/composables/gtfs.js'
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiAlertCircleOutline, mdiClockOutline } from '@mdi/js'
-import dayjs from 'dayjs'
+import { useLocaleDayjs } from '@data-fair/lib-vue/locale-dayjs.js'
 import { countModes, groupByMode } from '@/utils/transit-mode'
 import RouteBadge from '../route-badge.vue'
 import TransitModeLabel from '../transit-mode-label.vue'
@@ -99,6 +99,7 @@ const emit = defineEmits<{
 const sortedRoutes = computed(() => [...props.routes].sort((a, b) => a.shortName.localeCompare(b.shortName, locale.value, { numeric: true })))
 
 const uid = useId()
+const { dayjs } = useLocaleDayjs()
 
 // a single-mode network keeps the plain list, without group titles
 const showModes = computed(() => countModes(props.routes, r => r.mode ?? null) > 1)
@@ -119,7 +120,7 @@ fr:
   searching: Recherche des véhicules…
   routes: Lignes du réseau
 en:
-  vehicles: "no vehicle | {n} vehicle | {n} vehicles"
+  vehicles: "No vehicle | {n} vehicle | {n} vehicles"
   searching: Looking for vehicles…
   routes: Network routes
 </i18n>

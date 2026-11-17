@@ -12,8 +12,7 @@ declare global {
     APPLICATION: Application & { apiUrl: string, exposedUrl?: string }
     __PUBLIC_SITE_INFO?: FullSiteInfo
     vIframeOptions?: { reactiveParams: Record<string, string> }
-    triggerCapture?: (animationSupported?: boolean) => boolean | Promise<boolean> | void
-    animateCaptureFrame?: () => boolean
+    triggerCapture?: (animationSupported?: boolean) => Promise<boolean>
     /** test hook: maplibre instance, set in DEV only (gtfs-map.vue) */
     __MAP__?: MLMap
   }

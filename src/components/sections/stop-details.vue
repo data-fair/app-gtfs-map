@@ -46,7 +46,7 @@
           :key="i"
           class="d-flex align-center ga-2 text-body-medium"
         >
-          <strong class="departure-time">{{ departure.time }}</strong>
+          <span class="departure-time font-weight-bold">{{ departure.time }}</span>
           <RouteBadge
             v-if="departure.routeName"
             :route-name="departure.routeName"

@@ -5,7 +5,7 @@
         :route-name="shortName"
         :color="color"
       />
-      <strong>{{ t('route', { name: shortName }) }}</strong>
+      <span class="font-weight-bold">{{ t('route', { name: shortName }) }}</span>
       <template v-if="mode">
         <span aria-hidden="true">·</span>
         <TransitModeLabel

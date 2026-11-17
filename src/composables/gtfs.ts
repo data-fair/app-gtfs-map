@@ -1,6 +1,5 @@
 import type { FeatureCollection } from 'geojson'
 import type { TransitMode } from '../utils/transit-mode.js'
-import dayjs from 'dayjs'
 import { transitMode } from '../utils/transit-mode.js'
 
 /**
@@ -331,7 +330,7 @@ export function parseGtfsTime (value?: string | null): number | null {
  * departures dataset `route_name` column carries the short name, falling back to the long name).
  */
 export function selectDepartures (rows: any[], now: Date, allowedRouteNames?: Set<string> | null): Departure[] {
-  const today = dayjs(now).format('YYYY-MM-DD')
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const dayName = DAY_NAMES[(now.getDay() + 6) % 7]
   const nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
 

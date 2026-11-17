@@ -5,7 +5,7 @@
         :route-name="vehicle.routeName || t('bus')"
         :color="vehicle.color"
       />
-      <strong>{{ vehicle.label || vehicle.id || t('vehicle') }}</strong>
+      <span class="font-weight-bold">{{ vehicle.label || vehicle.id || t('vehicle') }}</span>
       <template v-if="mode">
         <span aria-hidden="true">·</span>
         <TransitModeLabel
