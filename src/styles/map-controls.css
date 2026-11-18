@@ -85,10 +85,14 @@
   border-left-color: rgb(var(--v-theme-surface));
 }
 
-/* built-in icons are dark background images; the four session themes are default, dark, hc, hc-dark */
-:is(.v-theme--dark, .v-theme--hc-dark) .maplibregl-map .maplibregl-ctrl-icon,
-:is(.v-theme--dark, .v-theme--hc-dark) .maplibregl-map .maplibregl-ctrl-attrib-button {
-  filter: invert(1);
+/* built-in icons are dark background images; the four session themes are default, dark, hc, hc-dark.
+   Not under forced colors: maplibre-gl.css then swaps in icons of the system scheme itself (white on a
+   dark one), which the invert turned back to black on black */
+@media not (forced-colors: active) {
+  :is(.v-theme--dark, .v-theme--hc-dark) .maplibregl-map .maplibregl-ctrl-icon,
+  :is(.v-theme--dark, .v-theme--hc-dark) .maplibregl-map .maplibregl-ctrl-attrib-button {
+    filter: invert(1);
+  }
 }
 /* active states (globe, terrain, geolocation) in the theme primary instead of maplibre's blue: the
    icon becomes a mask over a primary background, never inverted on dark themes */
