@@ -132,7 +132,9 @@
                 { "const": "cadastre", "title": "Cadastre" },
                 { "const": "satellite", "title": "Vue satellite" },
                 { "const": "plan-ign-standard", "title": "Plan IGN" },
-                { "const": "plan-ign-ortho", "title": "Photographies aériennes (IGN)" }
+                { "const": "plan-ign-ortho", "title": "Photographies aériennes (IGN)" },
+                { "const": "unesco-clearmap", "title": "UNESCO ClearMap (monde)" },
+                { "const": "esri-light-gray", "title": "Esri Light Gray Canvas" }
               ]
             },
             "lineWidth": {

@@ -1,3 +1,4 @@
+import type { StyleSpecification } from 'maplibre-gl'
 import { test, expect } from '@playwright/test'
 import { basemaps, resolveMapStyle, firstSymbolLayer, credentialsFor, mapLocale, createBasemapSwitch } from '../../src/utils/map-styles'
 
@@ -15,14 +16,31 @@ test('local and IGN styles do not go through the tileserver', () => {
   expect(ortho).toMatchObject({ sources: { 'ign-ortho': { type: 'raster', attribution: '© IGN' } } })
 })
 
+test('ClearMap and Esri Light Gray are raster styles credited by their basemap, not their sources', () => {
+  const clearmap = resolveMapStyle('unesco-clearmap', ORIGIN) as StyleSpecification
+  expect(clearmap).toMatchObject({
+    glyphs: `${ORIGIN}/tileserver/fonts/{fontstack}/{range}.pbf`,
+    sources: { 'unesco-clearmap': { type: 'raster', tiles: ['https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}'], maxzoom: 6 } }
+  })
+  const esri = resolveMapStyle('esri-light-gray', ORIGIN) as StyleSpecification
+  expect(esri.layers.map(l => l.id)).toEqual(['esri-light-gray-base', 'esri-light-gray-reference'])
+  expect(esri.sources['esri-light-gray-reference']).toMatchObject({ type: 'raster', maxzoom: 16 })
+  for (const style of [clearmap, esri]) {
+    for (const source of Object.values(style.sources)) expect(source).not.toHaveProperty('attribution')
+  }
+  expect(basemaps.find(b => b.id === 'unesco-clearmap')?.attribution).toEqual(['© United Nations — ClearMap'])
+  expect(basemaps.find(b => b.id === 'esri-light-gray')?.attribution).toEqual(['© Esri, HERE, Garmin, © OpenStreetMap contributors'])
+})
+
 test('a local style is a fresh object at each call', () => {
   expect(resolveMapStyle('void', ORIGIN)).not.toBe(resolveMapStyle('void', ORIGIN))
 })
 
-test('basemap ids are unique and every IGN basemap carries its attribution', () => {
+test('basemap ids are unique and every external basemap carries its attribution', () => {
   const ids = basemaps.map(b => b.id)
   expect(new Set(ids).size).toBe(ids.length)
-  for (const b of basemaps.filter(b => b.external)) expect(b.attribution).toEqual(['© IGN'])
+  for (const b of basemaps.filter(b => b.external)) expect(b.attribution).toHaveLength(1)
+  for (const b of basemaps.filter(b => b.id.startsWith('plan-ign-'))) expect(b.attribution).toEqual(['© IGN'])
   expect(basemaps.find(b => b.id === 'satellite')?.attribution).toContain('© IGN')
 })
 
@@ -50,6 +68,17 @@ test('data goes under the top block of labels, above roads', () => {
   expect(firstSymbolLayer([{ id: 'background', type: 'background' }, { id: 'water', type: 'fill' }])).toBeUndefined()
   expect(firstSymbolLayer([])).toBeUndefined()
   expect(firstSymbolLayer([{ id: 'labels', type: 'symbol' }])).toBe('labels')
+})
+
+test('a raster of labels belongs to the top block of labels, data goes under it', () => {
+  const esri = resolveMapStyle('esri-light-gray', ORIGIN) as StyleSpecification
+  expect(firstSymbolLayer(esri.layers)).toBe('esri-light-gray-reference')
+  const clearmap = resolveMapStyle('unesco-clearmap', ORIGIN) as StyleSpecification
+  expect(firstSymbolLayer(clearmap.layers)).toBeUndefined()
+  // the flag only counts at the top: an unflagged raster above it ends the block
+  const layers = [...esri.layers, { id: 'hillshade', type: 'raster' }]
+  expect(firstSymbolLayer(layers)).toBeUndefined()
+  expect(firstSymbolLayer([...esri.layers, { id: 'place', type: 'symbol' }])).toBe('esri-light-gray-reference')
 })
 
 test('the session cookie is only sent to the site itself', () => {

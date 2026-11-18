@@ -13,6 +13,8 @@ export interface Basemap {
 }
 
 const IGN = '© IGN'
+const UN = '© United Nations — ClearMap'
+const ESRI = '© Esri, HERE, Garmin, © OpenStreetMap contributors'
 const OSM = '<a href="https://www.openmaptiles.org/" target="_blank">&copy; OpenMapTiles</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>'
 
 // ids are the values stored in application configurations: never rename one
@@ -32,7 +34,9 @@ export const basemaps: Basemap[] = [
   // aerial imagery is dark: drawings on top use light colours
   { id: 'satellite', title: 'Vue satellite', dark: true, attribution: [IGN, OSM] },
   { id: 'plan-ign-standard', title: 'Plan IGN', external: true, attribution: [IGN] },
-  { id: 'plan-ign-ortho', title: 'Photographies aériennes (IGN)', dark: true, external: true, attribution: [IGN] }
+  { id: 'plan-ign-ortho', title: 'Photographies aériennes (IGN)', dark: true, external: true, attribution: [IGN] },
+  { id: 'unesco-clearmap', title: 'UNESCO ClearMap (monde)', external: true, attribution: [UN] },
+  { id: 'esri-light-gray', title: 'Esri Light Gray Canvas', external: true, attribution: [ESRI] }
 ]
 
 export const ignOrthoSource: RasterSourceSpecification = {
@@ -42,6 +46,17 @@ export const ignOrthoSource: RasterSourceSpecification = {
   maxzoom: 19,
   attribution: IGN
 }
+
+// metadata flag of a raster of labels (Esri reference layer): firstSymbolLayer counts it in the top
+// block of labels, so the data goes under it as under symbol labels
+const LABELS = 'map-styles:labels'
+
+const arcgisSource = (service: string, maxzoom: number): RasterSourceSpecification => ({
+  type: 'raster',
+  tiles: [`${service}/MapServer/tile/{z}/{y}/{x}`],
+  tileSize: 256,
+  maxzoom
+})
 
 export function resolveMapStyle (id: string, origin: string): string | StyleSpecification {
   // glyphs let an application add text layers on top of a local style
@@ -55,18 +70,40 @@ export function resolveMapStyle (id: string, origin: string): string | StyleSpec
       sources: { 'ign-ortho': structuredClone(ignOrthoSource) },
       layers: [{ id: 'ign-ortho', type: 'raster', source: 'ign-ortho' }]
     }
+    // z7 and beyond are a "map not available" watermark: maplibre overzooms z6
+    case 'unesco-clearmap': return {
+      version: 8,
+      glyphs,
+      sources: { 'unesco-clearmap': arcgisSource('https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo', 6) },
+      layers: [{ id: 'unesco-clearmap', type: 'raster', source: 'unesco-clearmap' }]
+    }
+    case 'esri-light-gray': return {
+      version: 8,
+      glyphs,
+      sources: {
+        'esri-light-gray-base': arcgisSource('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base', 16),
+        'esri-light-gray-reference': arcgisSource('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference', 16)
+      },
+      layers: [
+        { id: 'esri-light-gray-base', type: 'raster', source: 'esri-light-gray-base' },
+        { id: 'esri-light-gray-reference', type: 'raster', source: 'esri-light-gray-reference', metadata: { [LABELS]: true } }
+      ]
+    }
     default: return `${origin}/tileserver/styles/${id}/style.json`
   }
 }
 
+const isLabel = (layer?: { type: string, metadata?: unknown }) =>
+  layer?.type === 'symbol' || (layer?.metadata as Record<string, unknown> | undefined)?.[LABELS] === true
+
 /**
- * Id of the first layer of the top block of symbol layers, to insert data above roads and
- * boundaries but below place names. Call it on the basemap layers, before adding data layers.
- * Undefined when the style ends with no label: add on top.
+ * Id of the first layer of the top block of labels (symbol layers, or a raster of labels), to
+ * insert data above roads and boundaries but below place names. Call it on the basemap layers,
+ * before adding data layers. Undefined when the style ends with no label: add on top.
  */
-export function firstSymbolLayer (layers: readonly { id: string, type: string }[]): string | undefined {
+export function firstSymbolLayer (layers: readonly { id: string, type: string, metadata?: unknown }[]): string | undefined {
   let i = layers.length
-  while (i > 0 && layers[i - 1]?.type === 'symbol') i--
+  while (i > 0 && isLabel(layers[i - 1])) i--
   return layers[i]?.id
 }
 
