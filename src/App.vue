@@ -174,6 +174,13 @@ watch(highlightRouteId, (value) => {
   else delete reactiveSearchParams.route
 })
 
+// route changed from outside (parent page through d-frame sync-params, history): follow it
+watch(() => reactiveSearchParams.route, (value) => {
+  const routeId = value || null
+  if (routeId === highlightRouteId.value) return
+  selectRoute(routeId)
+})
+
 // lien périmé (la route n'existe plus dans le réseau) : ne pas filtrer la carte sur du vide
 watch([routeIndex, highlightRouteId], ([index, id]) => {
   if (id && index.size && !index.has(id)) {
