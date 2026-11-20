@@ -6,7 +6,9 @@ import {
   datasetDocUrl,
   familyFromConfig,
   findRealtimeUrl,
+  fragmentsUrl,
   hasRealtimeAttachment,
+  isFragmentOf,
   linksBackTo,
   type LinkedRef,
   type MetadataDoc,
@@ -16,7 +18,8 @@ import {
 /**
  * Résout la famille de jeux de données du traitement GTFS :
  * quand le jeu sélectionné change, les 3 jeux liés (tracés, arrêts, horaires) sont détectés
- * via relatedDatasets et l'URL du flux GTFS-RT est découverte dans les pièces jointes
+ * via relatedDatasets, or as fragments of the selected dataset (partOf) when the processing
+ * grouped them, et l'URL du flux GTFS-RT est découverte dans les pièces jointes
  * distantes du jeu porteur (le jeu de métadonnées, sans données).
  *
  * La famille complète (jeu de métadonnées + jeux liés) est poussée dans le tableau racine
@@ -88,7 +91,7 @@ export function useFamily () {
             schema: doc.schema
           }
           if (kind) {
-            const target = linksBackTo(doc, selectedId) ? found : fallback
+            const target = linksBackTo(doc, selectedId) || isFragmentOf(doc, selectedId) ? found : fallback
             if (!target.has(kind) && !found.has(kind)) target.set(kind, linkedRef)
           } else if (hasRealtimeAttachment(doc)) {
             if (linksBackTo(doc, selectedId)) {
@@ -101,6 +104,26 @@ export function useFamily () {
           // un jeu lié indisponible n'empêche pas d'afficher les autres couches
         }
       }))
+      // datasets grouped under the selected one by the processing: data-fair fragments,
+      // hidden from the default listing and possibly without relatedDatasets links.
+      // isFragmentOf also guards against a data-fair that ignores the partOf filter.
+      try {
+        const fragments = await fetchJson<{ results?: any[] }>(fragmentsUrl(application.apiUrl, selectedId ?? dataset.id))
+        for (const doc of fragments.results ?? []) {
+          if (!doc?.id || !isFragmentOf(doc, selectedId)) continue
+          const kind = classifyDataset(doc)
+          if (!kind || found.has(kind)) continue
+          found.set(kind, {
+            id: doc.id,
+            href: doc.href ?? datasetDocUrl(application.apiUrl, doc.id),
+            title: doc.title ?? doc.id,
+            schema: doc.schema
+          })
+        }
+      } catch {
+        // fragments unavailable: the relatedDatasets links remain
+      }
+
       // un schéma seul reste un indice de repli quand aucun lien retour n'est disponible
       for (const [kind, linkedRef] of fallback) {
         if (!found.has(kind)) found.set(kind, linkedRef)

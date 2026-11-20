@@ -173,6 +173,8 @@ export interface MockOptions {
   withoutRealtime?: boolean
   /** retire les jeux liés du jeu de métadonnées */
   withoutRelated?: boolean
+  /** family grouped by the processing: data datasets as fragments (partOf) of the metadata dataset, without relatedDatasets links */
+  grouped?: boolean
   /** retarde la réponse du jeu « tracés » (ms), pour vérifier l'ordre capture/rendu */
   shapesDelayMs?: number
   /** champs de configuration additionnels (panelPosition, largePanel...) */
@@ -214,10 +216,24 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
   })
 
   await page.route('**/tileserver/styles/klokantech-basic/style.json*', route => route.fulfill({ json: MINIMAL_STYLE }))
+  const dataDocs: Record<string, any> = Object.fromEntries(['gtfs-shapes', 'gtfs-stops', 'gtfs-stoptimes'].map(id => [id, { ...DOCS[id] }]))
+  if (options.grouped) {
+    metaDoc.relatedDatasets = []
+    for (const doc of Object.values(dataDocs)) {
+      doc.relatedDatasets = []
+      doc.partOf = { type: 'dataset', id: 'gtfs-meta' }
+    }
+  }
+  // fragments listing: only the grouped family has fragments
+  await page.route(url => url.pathname.endsWith('/api/v1/datasets') && url.searchParams.has('partOf'), route => route.fulfill({
+    json: options.grouped
+      ? { count: 3, results: Object.values(dataDocs) }
+      : { count: 0, results: [] }
+  }))
   await page.route('**/api/v1/datasets/gtfs-meta', route => route.fulfill({ json: metaDoc }))
-  await page.route('**/api/v1/datasets/gtfs-shapes', route => route.fulfill({ json: DOCS['gtfs-shapes'] }))
-  await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: DOCS['gtfs-stops'] }))
-  await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: DOCS['gtfs-stoptimes'] }))
+  await page.route('**/api/v1/datasets/gtfs-shapes', route => route.fulfill({ json: dataDocs['gtfs-shapes'] }))
+  await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: dataDocs['gtfs-stops'] }))
+  await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: dataDocs['gtfs-stoptimes'] }))
   await page.route('**/api/v1/datasets/gtfs-shapes/lines*', async route => {
     // __shapesAt n'est lu que pour contrôler l'ordre capture/rendu : ne l'évaluer
     // que dans ce cas, sinon l'evaluate peut s'exécuter après la fin du test

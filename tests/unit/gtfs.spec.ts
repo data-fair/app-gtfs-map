@@ -13,8 +13,10 @@ import {
   filterPlatformStops,
   filterStopsByRouteNames,
   findRealtimeUrl,
+  fragmentsUrl,
   gtfsInsertBeforeId,
   hasRealtimeAttachment,
+  isFragmentOf,
   isTruncated,
   linksBackTo,
   normalizeColor,
@@ -125,6 +127,19 @@ test.describe('famille de jeux', () => {
     expect(linksBackTo({ relatedDatasets: [{ id: 'autre' }] }, 'meta')).toBe(false)
     expect(linksBackTo({}, 'meta')).toBe(false)
     expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, undefined)).toBe(false)
+  })
+
+  test('isFragmentOf requires a dataset fragment of the selected dataset', () => {
+    expect(isFragmentOf({ partOf: { type: 'dataset', id: 'meta' } }, 'meta')).toBe(true)
+    expect(isFragmentOf({ partOf: { type: 'dataset', id: 'autre' } }, 'meta')).toBe(false)
+    expect(isFragmentOf({ partOf: { type: 'application', id: 'meta' } }, 'meta')).toBe(false)
+    expect(isFragmentOf({}, 'meta')).toBe(false)
+    expect(isFragmentOf({ partOf: { type: 'dataset', id: 'meta' } }, undefined)).toBe(false)
+  })
+
+  test('fragmentsUrl lists the fragments of a dataset', () => {
+    expect(fragmentsUrl('https://koumoul.com/data-fair/api/v1/', 'meta'))
+      .toBe('https://koumoul.com/data-fair/api/v1/datasets?partOf=dataset%3Ameta&size=50')
   })
 
   test('familyFromConfig classifie les entrées liées du tableau datasets, sans l\'entrée 0', () => {

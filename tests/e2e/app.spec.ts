@@ -46,6 +46,16 @@ test.describe('app-gtfs-map', () => {
     expect(captureAt).toBeGreaterThanOrEqual(shapesAt)
   })
 
+  test('finds the datasets grouped under the metadata dataset (fragments, no relatedDatasets)', async ({ page }) => {
+    await mockApp(page, { grouped: true, vehicles: 2 })
+    await page.goto('/')
+
+    const panel = page.locator('.navigation-side')
+    await expect(panel.locator('.route-item')).toHaveCount(2, { timeout: 15000 })
+    await expect(panel.getByText(/2 véhicules/)).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(/Aucun jeu lié/)).toHaveCount(0)
+  })
+
   test('signale une configuration inexploitable sans jeu lié « tracés » ni « arrêts »', async ({ page }) => {
     await mockApp(page, { withoutRelated: true, withoutRealtime: true })
     await page.goto('/')
