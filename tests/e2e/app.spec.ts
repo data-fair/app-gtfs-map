@@ -535,13 +535,15 @@ test.describe('app-gtfs-map', () => {
     expect(groupBg).not.toBe('rgb(255, 255, 255)')
   })
 
-  test('dark high contrast: hc-dark theme and inverted icons', async ({ page }) => {
+  test('dark high contrast: hc-dark theme, icons left to the system scheme', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' })
     await mockApp(page, { withoutRealtime: true })
     await page.goto('/')
 
     await expect(page.locator('.v-application')).toHaveClass(/v-theme--hc-dark/, { timeout: 15000 })
-    await expect(page.locator('.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon')).toHaveCSS('filter', 'invert(1)')
+    // under forced colors maplibre-gl.css swaps in icons of the system scheme: inverting them
+    // would turn them black on black
+    await expect(page.locator('.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon')).toHaveCSS('filter', 'none')
   })
 
   test('English session: app and panel texts in English', async ({ page, context, baseURL }) => {
