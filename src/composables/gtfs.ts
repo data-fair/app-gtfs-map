@@ -6,6 +6,8 @@ import { transitMode } from '../utils/transit-mode.js'
  * GTFS domain types and helpers, as produced by processing-gtfs:
  * - 1 "metadata" dataset without data, carrying the attachments (archive + remote GTFS-RT feed)
  * - 3 related datasets declared in relatedDatasets: shapes, stops, departures
+ * - or, when the processing groups them, the same 3 datasets as data-fair fragments of the
+ *   metadata dataset (partOf), with or without relatedDatasets links
  */
 
 export interface LinkedRef {
@@ -24,6 +26,7 @@ export interface MetadataDoc {
   title?: string
   href?: string
   relatedDatasets?: Array<{ id: string, title?: string }>
+  partOf?: { type: string, id: string }
   attachments?: Array<{ type: string, name: string, title?: string, url?: string }>
 }
 
@@ -85,6 +88,10 @@ export const isRealtimeAttachment = (attachment: { type?: string, name?: string 
 /** True if `doc` references the `selectedId` dataset (bidirectional links set by the processing). */
 export const linksBackTo = (doc: { relatedDatasets?: Array<{ id: string }> }, selectedId: string | undefined): boolean =>
   !!selectedId && (doc.relatedDatasets ?? []).some(r => r.id === selectedId)
+
+/** True if `doc` is a data-fair fragment of the dataset `selectedId` (datasets grouped by the processing). */
+export const isFragmentOf = (doc: { partOf?: { type?: string, id?: string } }, selectedId: string | undefined): boolean =>
+  !!selectedId && doc.partOf?.type === 'dataset' && doc.partOf.id === selectedId
 
 /** True if the document carries the GTFS-RT feed declared by the processing. */
 export const hasRealtimeAttachment = (doc: MetadataDoc): boolean =>

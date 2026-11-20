@@ -16,6 +16,7 @@ import {
   filterStopsByRouteNames,
   findRealtimeUrl,
   hasRealtimeAttachment,
+  isFragmentOf,
   isTruncated,
   linksBackTo,
   normalizeColor,
@@ -143,6 +144,14 @@ test.describe('findRealtimeUrl', () => {
 })
 
 test.describe('dataset family', () => {
+  test('isFragmentOf requires a dataset fragment of the selected dataset', () => {
+    expect(isFragmentOf({ partOf: { type: 'dataset', id: 'meta' } }, 'meta')).toBe(true)
+    expect(isFragmentOf({ partOf: { type: 'dataset', id: 'autre' } }, 'meta')).toBe(false)
+    expect(isFragmentOf({ partOf: { type: 'application', id: 'meta' } }, 'meta')).toBe(false)
+    expect(isFragmentOf({}, 'meta')).toBe(false)
+    expect(isFragmentOf({ partOf: { type: 'dataset', id: 'meta' } }, undefined)).toBe(false)
+  })
+
   test('linksBackTo requires a back link to the selected dataset', () => {
     expect(linksBackTo({ relatedDatasets: [{ id: 'meta' }] }, 'meta')).toBe(true)
     expect(linksBackTo({ relatedDatasets: [{ id: 'autre' }] }, 'meta')).toBe(false)

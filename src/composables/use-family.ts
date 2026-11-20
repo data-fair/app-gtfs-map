@@ -12,12 +12,14 @@ import {
   familyFromConfig,
   findRealtimeUrl,
   hasRealtimeAttachment,
+  isFragmentOf,
   linksBackTo
 } from './gtfs.js'
 
 /**
  * Resolves the GTFS processing dataset family: when the selected dataset changes, the
- * 3 related datasets (shapes, stops, departures) are detected through relatedDatasets and
+ * 3 related datasets (shapes, stops, departures) are detected through relatedDatasets, or
+ * as fragments of the selected dataset (partOf) when the processing grouped them, and
  * the GTFS-RT feed URL is found in the remote attachments of the carrier dataset (the
  * metadata dataset, without data).
  *
@@ -73,6 +75,13 @@ export function useFamily () {
     () => relatedIds.value ? datasetDocUrl(application.apiUrl, '').replace(/\/$/, '') : null,
     { query: () => ({ ids: relatedIds.value, size: 50 }), notifError: false }
   )
+  // datasets grouped under the selected one by the processing: data-fair fragments, hidden
+  // from the default listing and possibly without relatedDatasets links
+  const selectedId = computed(() => metadataDataset.value?.id as string | undefined)
+  const fragments = useFetch<{ results?: any[] }>(
+    () => selectedId.value ? datasetDocUrl(application.apiUrl, '').replace(/\/$/, '') : null,
+    { query: () => ({ partOf: `dataset:${selectedId.value}`, size: 50 }), notifError: false }
+  )
 
   function resolve (selfDoc: MetadataDoc, relatedDocs: any[]) {
     const dataset = metadataDataset.value
@@ -95,7 +104,7 @@ export function useFamily () {
           schema: doc.schema,
           finalizedAt: doc.finalizedAt
         }
-        const target = linksBackTo(doc, selectedId) ? found : fallback
+        const target = linksBackTo(doc, selectedId) || isFragmentOf(doc, selectedId) ? found : fallback
         if (!target.has(kind) && !found.has(kind)) target.set(kind, linkedRef)
       } else if (hasRealtimeAttachment(doc)) {
         if (linksBackTo(doc, selectedId)) {
@@ -150,15 +159,19 @@ export function useFamily () {
     resolved.value = true
   }
 
-  watch([self.data, self.error, self.loading, related.data, related.loading], () => {
+  watch([self.data, self.error, self.loading, related.data, related.loading, fragments.data, fragments.loading], () => {
     if (self.error.value) {
       // the dataset may still be finalizing: only reported when no layer is already configured
       error.value = 'familyLoad'
       return
     }
-    if (!self.data.value || self.loading.value || related.loading.value) return
+    if (!self.data.value || self.loading.value || related.loading.value || fragments.loading.value) return
     error.value = null
-    resolve(self.data.value, relatedIds.value ? related.data.value?.results ?? [] : [])
+    const relatedDocs = relatedIds.value ? related.data.value?.results ?? [] : []
+    // isFragmentOf also guards against a data-fair that ignores the partOf filter
+    const fragmentDocs = (fragments.data.value?.results ?? [])
+      .filter(doc => isFragmentOf(doc, selectedId.value) && !relatedDocs.some(r => r?.id === doc.id))
+    resolve(self.data.value, [...relatedDocs, ...fragmentDocs])
   // post: the related request triggered by a new self document has already started (loading true)
   }, { flush: 'post' })
 

@@ -194,6 +194,8 @@ export interface MockOptions {
   withoutRealtime?: boolean
   /** removes the related datasets of the metadata dataset */
   withoutRelated?: boolean
+  /** family grouped by the processing: data datasets as fragments (partOf) of the metadata dataset, without relatedDatasets links */
+  grouped?: boolean
   /** delays the shapes dataset response (ms), to check capture/render order */
   shapesDelayMs?: number
   /** additional configuration fields (panelPosition, largePanel...) */
@@ -205,6 +207,14 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
 
   const metaDoc = { ...DOCS['gtfs-meta'] }
   if (options.withoutRelated) metaDoc.relatedDatasets = []
+  const dataDocs: Record<string, any> = Object.fromEntries(['gtfs-shapes', 'gtfs-stops', 'gtfs-stoptimes'].map(id => [id, { ...DOCS[id] }]))
+  if (options.grouped) {
+    metaDoc.relatedDatasets = []
+    for (const doc of Object.values(dataDocs)) {
+      doc.relatedDatasets = []
+      doc.partOf = { type: 'dataset', id: 'gtfs-meta' }
+    }
+  }
   if (options.withoutRealtime) {
     metaDoc.attachments = (metaDoc.attachments ?? []).filter((a: any) => a.type !== 'remoteFile')
   }
@@ -241,15 +251,20 @@ export async function mockApp (page: Page, options: MockOptions = {}) {
   await page.route('**/tileserver/fonts/**', route => route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }))
   await page.route('**/api/v1/datasets/gtfs-stoptimes/lines*', route => route.fulfill({ json: { total: 0, results: [] } }))
   await page.route('**/api/v1/datasets/gtfs-meta', route => route.fulfill({ json: metaDoc }))
-  // related datasets are read in one list request (?ids=)
+  // related datasets are read in one list request (?ids=), fragments in another (?partOf=)
   await page.route(/\/api\/v1\/datasets\?/, route => {
-    const ids = new URL(route.request().url()).searchParams.get('ids')?.split(',') ?? []
-    const results = ids.map(id => DOCS[id]).filter(Boolean)
+    const params = new URL(route.request().url()).searchParams
+    if (params.has('partOf')) {
+      const results = options.grouped ? Object.values(dataDocs) : []
+      return route.fulfill({ json: { count: results.length, results } })
+    }
+    const ids = params.get('ids')?.split(',') ?? []
+    const results = ids.map(id => dataDocs[id]).filter(Boolean)
     return route.fulfill({ json: { count: results.length, results } })
   })
-  await page.route('**/api/v1/datasets/gtfs-shapes', route => route.fulfill({ json: DOCS['gtfs-shapes'] }))
-  await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: DOCS['gtfs-stops'] }))
-  await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: DOCS['gtfs-stoptimes'] }))
+  await page.route('**/api/v1/datasets/gtfs-shapes', route => route.fulfill({ json: dataDocs['gtfs-shapes'] }))
+  await page.route('**/api/v1/datasets/gtfs-stops', route => route.fulfill({ json: dataDocs['gtfs-stops'] }))
+  await page.route('**/api/v1/datasets/gtfs-stoptimes', route => route.fulfill({ json: dataDocs['gtfs-stoptimes'] }))
   await page.route('**/api/v1/datasets/gtfs-shapes/lines*', async route => {
     // __shapesAt is only read to check capture/render order: evaluate it only
     // in that case, otherwise the evaluate may run after the test has ended
